@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.17.0](https://github.com/santifer/career-ops/compare/career-ops-v1.16.0...career-ops-v1.17.0) (2026-07-02)
+
+
+### Features
+
+* **find:** resolve a company/role/number query to its full pipeline identity ([#1439](https://github.com/santifer/career-ops/issues/1439)) ([3fd0a06](https://github.com/santifer/career-ops/commit/3fd0a06c14481633d28db5a47f9c9317205e9a7d))
+* **registry:** add startup boards plugin ([#1413](https://github.com/santifer/career-ops/issues/1413)) ([f2e1d08](https://github.com/santifer/career-ops/commit/f2e1d080ca9eaa8022a53cc91eef313071892aa7))
+* **verify:** detect duplicate and orphan reports ([#1425](https://github.com/santifer/career-ops/issues/1425)) ([#1441](https://github.com/santifer/career-ops/issues/1441)) ([5c42df3](https://github.com/santifer/career-ops/commit/5c42df3613c4839055a769f81be595677a973c74))
+
+
+### Bug Fixes
+
+* **onboarding:** auto-copy template seeds in doctor --json ([#782](https://github.com/santifer/career-ops/issues/782), [#1369](https://github.com/santifer/career-ops/issues/1369)) ([#1369](https://github.com/santifer/career-ops/issues/1369)) ([3c06b46](https://github.com/santifer/career-ops/commit/3c06b461903ce2d8c935862b433a1ff2b65039dc))
+* prevent notion plugin from mangling slash-formatted scores ([#1414](https://github.com/santifer/career-ops/issues/1414)) ([#1417](https://github.com/santifer/career-ops/issues/1417)) ([6ea2e5f](https://github.com/santifer/career-ops/commit/6ea2e5f63a172d00e5e64712bc8fb72d6562b680))
+
 ## [1.16.0](https://github.com/santifer/career-ops/compare/career-ops-v1.15.0...career-ops-v1.16.0) (2026-07-02)
 
 
