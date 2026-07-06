@@ -25,6 +25,9 @@
  *   node scan-ats-full.mjs --liveness           # Playwright-verify matches before writing
  *   node scan-ats-full.mjs --verbose            # log per-board fetch failures
  *   node scan-ats-full.mjs --md-out <dir>       # also write a dated markdown digest to <dir>
+ *   node scan-ats-full.mjs --seeds boston       # curated metro-region seed (seeds/regions.mjs)
+ *   node scan-ats-full.mjs --region boston      # region seed + metro location filter in one flag
+ *   node scan-ats-full.mjs --location-allow "boston,cambridge, ma"  # override portals.yml location_filter for this run
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
@@ -37,8 +40,14 @@ import greenhouse from './providers/greenhouse.mjs';
 import lever from './providers/lever.mjs';
 import ashby from './providers/ashby.mjs';
 import workday from './providers/workday.mjs';
+import smartrecruiters from './providers/smartrecruiters.mjs';
 import { buildTitleFilter, buildLocationFilter, loadSeenUrls, appendToPipeline, appendToScanHistory } from './scan.mjs';
 import { SEED_SOURCES, toPortalEntry } from './seeds/vc-portfolios.mjs';
+import { REGION_SEED_SOURCES, REGION_LOCATION_KEYWORDS } from './seeds/regions.mjs';
+
+// VC portfolios and metro regions share one seed namespace — both plug into
+// --seeds; --region is sugar for a region seed plus its metro location filter.
+const ALL_SEED_SOURCES = { ...SEED_SOURCES, ...REGION_SEED_SOURCES };
 
 // ── Config ──────────────────────────────────────────────────────────
 
@@ -132,11 +141,29 @@ function parseArgs(argv) {
   const seeds = seedsArg
     ? seedsArg.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
     : [];
-  const unknownSeeds = seeds.filter(s => !SEED_SOURCES[s]);
+  // --region <id>: shorthand for adding the region seed AND (unless the user
+  // passed --location-allow themselves) constraining locations to that metro.
+  const regionArg = valueOf('--region');
+  const region = regionArg ? regionArg.trim().toLowerCase() : null;
+  if (region) {
+    if (!REGION_SEED_SOURCES[region]) {
+      console.error(`Error: unknown region "${region}". Valid: ${Object.keys(REGION_SEED_SOURCES).join(', ')}`);
+      process.exit(1);
+    }
+    if (!seeds.includes(region)) seeds.push(region);
+  }
+  const unknownSeeds = seeds.filter(s => !ALL_SEED_SOURCES[s]);
   if (unknownSeeds.length) {
-    console.error(`Error: unknown seed source(s): ${unknownSeeds.join(', ')}. Valid: ${Object.keys(SEED_SOURCES).join(', ')}`);
+    console.error(`Error: unknown seed source(s): ${unknownSeeds.join(', ')}. Valid: ${Object.keys(ALL_SEED_SOURCES).join(', ')}`);
     process.exit(1);
   }
+  // --location-allow "kw1,kw2": replace portals.yml location_filter for this
+  // run (allow-list semantics). Falls back to the region's metro keywords when
+  // --region is set without an explicit override.
+  const locationAllowArg = valueOf('--location-allow');
+  const locationAllow = locationAllowArg
+    ? locationAllowArg.split(',').map(s => s.trim()).filter(Boolean)
+    : (region ? REGION_LOCATION_KEYWORDS[region] ?? null : null);
   // When --seeds is the only discovery flag (no --ats), default --ats to none
   // so we don't also walk the full ATS directories unintentionally.
   const ats = atsArg
@@ -152,6 +179,8 @@ function parseArgs(argv) {
     limit,
     ats,
     seeds,
+    region,
+    locationAllow,
     dryRun: args.includes('--dry-run'),
     liveness: args.includes('--liveness'),
     verbose: args.includes('--verbose'),
@@ -223,7 +252,7 @@ export function sampleCompanies(list, limit, shuffle) {
 // ATS providers that can auto-detect from a careers_url, in probe order.
 // Workday is excluded: its URL format requires a tenant|instance|site triple
 // that can't be derived from a portfolio slug alone.
-const SEED_PROVIDERS = [greenhouse, lever, ashby];
+const SEED_PROVIDERS = [greenhouse, lever, ashby, smartrecruiters];
 
 /**
  * Scan a VC portfolio seed source and return matching job offers.
@@ -240,7 +269,7 @@ const SEED_PROVIDERS = [greenhouse, lever, ashby];
  * @returns {Promise<object[]>}  New job offers (same shape as ATS scan offers).
  */
 export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
-  const source = SEED_SOURCES[seedId];
+  const source = ALL_SEED_SOURCES[seedId];
   if (!source) throw new Error(`runSeedScan: unknown seed "${seedId}"`);
 
   let companies;
@@ -362,7 +391,14 @@ async function main() {
   }
   const config = yaml.load(readFileSync(PORTALS_PATH, 'utf-8'));
   const titleFilter = buildTitleFilter(config?.title_filter);
-  const locationFilter = buildLocationFilter(config?.location_filter);
+  // --location-allow / --region override portals.yml location_filter for this
+  // run; allow-list-only semantics (no block list, no always_allow rescue).
+  const locationFilter = opts.locationAllow
+    ? buildLocationFilter({ allow: opts.locationAllow })
+    : buildLocationFilter(config?.location_filter);
+  if (opts.locationAllow) {
+    console.error(`ℹ️  location filter overridden for this run: ${opts.locationAllow.join(', ')}`);
+  }
   if (!config?.title_filter?.positive?.length) {
     console.error('⚠️  portals.yml has no title_filter.positive — every fresh posting on every board will match. Consider adding keywords.');
   }
@@ -443,9 +479,9 @@ async function main() {
     log(`\n  done (${errors} unreachable boards skipped)`);
   }
 
-  // ── VC portfolio seed sources (--seeds flag) ───────────────────────
+  // ── Seed sources: VC portfolios + metro regions (--seeds / --region) ──
   for (const seedId of opts.seeds) {
-    const seedSource = SEED_SOURCES[seedId];
+    const seedSource = ALL_SEED_SOURCES[seedId];
     log(`\n🌱 ${seedSource.label} (${seedId}-seed) — fetching portfolio...`);
     const result = await runSeedScan(seedId, opts, ctx, seenUrls, seedSource.label);
     if (result && result.offers) {
