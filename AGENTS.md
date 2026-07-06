@@ -410,3 +410,7 @@ Write one TSV file per evaluation to `batch/tracker-additions/{num}-{company-slu
 - No markdown bold (`**`) in status field
 - No dates in status field (use the date column)
 - No extra text (use the notes column)
+
+## Candidate Fact Integrity (binding — added 2026-07-05)
+
+Candidate facts come exclusively from cv.md and modes/resume-factory-spec.md §3. The quarantine list in the spec §9 is binding. Never invent, inflate, or extrapolate a candidate fact.

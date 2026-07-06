@@ -1,5 +1,11 @@
 # Mode: pdf — ATS-Optimized PDF Generation
 
+> **ROUTING NOTE (binding, 2026-07-05):** This mode is retained for COVER LETTERS only
+> (the `cover` sub-flow uses its HTML→PDF pipeline). All resume/CV generation —
+> including the auto-pipeline's CV step — routes through `modes/resume-factory.md`
+> (Resume Factory v2). If you reached this file for a resume, stop and execute
+> `modes/resume-factory.md` instead.
+
 ## Full pipeline
 
 1. Read `cv.md` as the source of truth

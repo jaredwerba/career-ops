@@ -39,12 +39,9 @@ The evaluation inherits `oferta`'s bounded research budget. Company, compensatio
 Save the full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` (see format in `modes/oferta.md`).
 Include Block G in the saved report. Add **URL:** {url} and **Legitimacy:** {tier} to the report header.
 
-## Step 3 — Generate PDF
+## Step 3 — Generate Resume
 
-Read `config/profile.yml`. Check `cv.output_format`:
-
-- If `"latex"`, execute the full pipeline from `modes/latex.md`
-- Otherwise (default), execute the full pipeline from `modes/pdf.md`
+**ALL resume/CV generation routes through `modes/resume-factory.md` (Resume Factory v2) — execute that pipeline for this step.** The `modes/pdf.md` HTML pipeline and `modes/latex.md` are NOT used for resumes; `pdf` remains in use only for cover letters. Candidate facts come exclusively from `cv.md` and `modes/resume-factory-spec.md` §3; the quarantine list in the spec §9 is binding.
 
 ## Step 4 — Draft Application Answers (only if score >= 4.5)
 

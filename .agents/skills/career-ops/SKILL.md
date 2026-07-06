@@ -4,7 +4,7 @@ description: AI job search command center -- evaluate offers, generate CVs, scan
 arguments: mode
 user_invocable: true
 user-invocable: true
-argument-hint: "[scan | deep | pdf | latex | cover | email | add | eu-swe | oferta | ofertas | apply | batch | tracker | agent-inbox | pipeline | contacto | training | project | interview-prep | interview | interview/plan | interview/practice | interview/debrief | patterns | followup | update]"
+argument-hint: "[scan | deep | resume-factory | pdf | latex | cover | email | add | eu-swe | oferta | ofertas | apply | batch | tracker | agent-inbox | pipeline | contacto | training | project | interview-prep | interview | interview/plan | interview/practice | interview/debrief | patterns | followup | update]"
 license: MIT
 ---
 
@@ -47,6 +47,7 @@ Determine the mode from `$mode`:
 | `interview/plan` | `interview/plan` |
 | `interview/practice` | `interview/practice` |
 | `interview/debrief` | `interview/debrief` |
+| `resume-factory` | `resume-factory` |
 | `pdf` | `pdf` |
 | `latex` | `latex` |
 | `email` | `email` |
@@ -68,6 +69,8 @@ Determine the mode from `$mode`:
 **Auto-pipeline detection:** If `$mode` is not a known sub-command AND contains JD text (keywords: "responsibilities", "requirements", "qualifications", "about the role", "we're looking for", company name + role) or a URL to a JD, execute `auto-pipeline`.
 
 If `$mode` is not a sub-command AND doesn't look like a JD, show discovery.
+
+**Resume routing rule (binding):** ALL resume/CV generation — including the auto-pipeline's CV step and any request for a resume, CV, or tailored application document — routes through `resume-factory` (`modes/resume-factory.md`, Resume Factory v2). The default `pdf` mode's HTML pipeline remains in use ONLY for cover letters. Candidate facts come exclusively from `cv.md` and `modes/resume-factory-spec.md` §3; the quarantine list in the spec §9 is binding. Never invent, inflate, or extrapolate a candidate fact.
 
 ---
 
@@ -104,7 +107,8 @@ Available commands:
   /career-ops interview/plan → Time-blocked prep plan for an upcoming interview
   /career-ops interview/practice → Practice interview, one question at a time with feedback
   /career-ops interview/debrief → Post-interview debrief: close gaps, predict next round
-  /career-ops pdf       → PDF only, ATS-optimized CV
+  /career-ops resume-factory → Resume Factory v2: integrity-railed resume from a JD (docx + pdf)
+  /career-ops pdf       → (cover letters only — resumes route through resume-factory)
   /career-ops latex     → Export CV as LaTeX/Overleaf .tex
   /career-ops cover     → Cover letter: standalone JD paste or /career-ops cover {slug}
   /career-ops email     → Formal application email draft (draft-only; never sends, submits, or clicks)
@@ -133,7 +137,9 @@ After determining the mode, load the necessary files before executing:
 ### Modes that require `_shared.md` + their mode file:
 Read `modes/_shared.md` + `modes/{mode}.md`
 
-Applies to: `auto-pipeline`, `oferta`, `ofertas`, `pdf`, `contacto`, `apply`, `pipeline`, `scan`, `batch`
+Applies to: `auto-pipeline`, `oferta`, `ofertas`, `pdf`, `resume-factory`, `contacto`, `apply`, `pipeline`, `scan`, `batch`
+
+(`resume-factory` additionally reads `modes/resume-factory-spec.md` in full — the spec is self-contained and overrides on conflict.)
 
 ### Standalone modes (only their mode file):
 Read `modes/{mode}.md`
