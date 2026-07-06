@@ -279,6 +279,10 @@ export function toPortalEntry(company) {
       careers_url = `https://jobs.lever.co/${atsId}`;
     } else if (company.ats === 'ashby') {
       careers_url = `https://jobs.ashbyhq.com/${atsId}`;
+    } else if (company.ats === 'smartrecruiters') {
+      // Region seeds (seeds/regions.mjs) may pin a SmartRecruiters board; the
+      // smartrecruiters provider detects this careers-host URL directly.
+      careers_url = `https://careers.smartrecruiters.com/${atsId}`;
     }
   }
 

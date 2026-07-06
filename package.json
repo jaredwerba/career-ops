@@ -27,6 +27,8 @@
     "scan:full": "node scan-ats-full.mjs",
     "scan:seeds": "node scan-ats-full.mjs --seeds yc,a16z",
     "scan:yc": "node scan-ats-full.mjs --seeds yc",
+    "scan:boston": "node scan-ats-full.mjs --region boston --since 7",
+    "seeds:probe": "node seeds/regions.mjs boston --probe",
     "validate:portals": "node validate-portals.mjs",
     "verify:portals": "node verify-portals.mjs",
     "tracker": "node tracker.mjs",
