@@ -82,7 +82,30 @@ for (const [regionId, source] of Object.entries(REGION_SEED_SOURCES)) {
     Array.isArray(REGION_LOCATION_KEYWORDS[regionId]) && REGION_LOCATION_KEYWORDS[regionId].length > 0);
 }
 
-// ── 3. Registry contract parity with vc-portfolios ───────────────────
+// ── 3. SmartRecruiters freshness contract (region seeds depend on it) ─
+// classifyPostingDate compares postedAt NUMERICALLY against an epoch-ms
+// cutoff. A string postedAt silently classifies every posting 'keep'
+// (string < number is always false), defeating --since for SR seed
+// companies — this pins the numeric contract.
+
+import { parseSmartRecruitersResponse } from './providers/smartrecruiters.mjs';
+import { classifyPostingDate } from './scan-ats-full.mjs';
+
+const srJobs = parseSmartRecruitersResponse({
+  content: [
+    { name: 'Old AE', id: '1', releasedDate: '2019-08-08T14:00:00.000Z' },
+    { name: 'Undated AE', id: '2' },
+  ],
+}, 'TestCo');
+
+check('sr: postedAt is epoch ms (number)', typeof srJobs[0].postedAt === 'number');
+check('sr: missing releasedDate leaves postedAt unset', srJobs[1].postedAt === undefined);
+const cutoff = Date.parse('2026-01-01T00:00:00Z');
+check('sr: old posting classifies stale against a numeric cutoff',
+  classifyPostingDate(srJobs[0], cutoff) === 'stale');
+check('sr: undated posting classifies undated', classifyPostingDate(srJobs[1], cutoff) === 'undated');
+
+// ── 4. Registry contract parity with vc-portfolios ───────────────────
 
 for (const [id, source] of Object.entries(REGION_SEED_SOURCES)) {
   check(`${id}: registry entry has fetch() and label`,
