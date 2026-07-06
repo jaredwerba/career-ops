@@ -43,7 +43,7 @@ import ashby from './providers/ashby.mjs';
 import workday from './providers/workday.mjs';
 import smartrecruiters from './providers/smartrecruiters.mjs';
 import { buildTitleFilter, buildLocationFilter, loadSeenUrls, appendToPipeline, appendToScanHistory } from './scan.mjs';
-import { SEED_SOURCES, toPortalEntry } from './seeds/vc-portfolios.mjs';
+import { SEED_SOURCES, toPortalEntry, toPortalEntryCandidates } from './seeds/vc-portfolios.mjs';
 import { REGION_SEED_SOURCES, REGION_LOCATION_KEYWORDS } from './seeds/regions.mjs';
 
 // VC portfolios and metro regions share one seed namespace — both plug into
@@ -296,25 +296,35 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
   let droppedNoDate = 0;
 
   await parallelEach(capped, CONCURRENCY, async (company) => {
-    const entry = toPortalEntry(company);
-    if (!entry.careers_url) return;
-
-    // Try each ATS provider's detect() — first hit wins.
-    let provider = null;
-    for (const p of SEED_PROVIDERS) {
+    // A company without an explicit ats hint yields several candidate boards
+    // (greenhouse/ashby/lever by slug, compact variants, website) — probe each
+    // until one actually serves jobs. The old single greenhouse-by-slug guess
+    // missed most Ashby-hosted portfolios (nearly all recent YC batches).
+    const candidates = toPortalEntryCandidates(company);
+    let jobs = null;
+    let lastErr = null;
+    for (const entry of candidates) {
+      if (!entry.careers_url) continue;
+      let provider = null;
+      for (const p of SEED_PROVIDERS) {
+        try {
+          if (p.detect?.(entry)) { provider = p; break; }
+        } catch { /* no-op */ }
+      }
+      if (!provider) continue;
       try {
-        if (p.detect?.(entry)) { provider = p; break; }
-      } catch { /* no-op */ }
+        jobs = await provider.fetch(entry, ctx);
+        break; // First candidate board that responds wins.
+      } catch (err) {
+        lastErr = err; // Nonexistent board on this ATS — try the next candidate.
+      }
     }
-    if (!provider) return; // No ATS detected — skip silently (or log in --verbose).
-
-    let jobs;
-    try {
-      jobs = await provider.fetch(entry, ctx);
-    } catch (err) {
-      errors++;
-      if (opts.verbose) console.error(`  ✗ ${seedId}/${entry.name}: ${err.message}`);
-      return;
+    if (jobs === null) {
+      if (lastErr) {
+        errors++;
+        if (opts.verbose) console.error(`  ✗ ${seedId}/${company.name}: ${lastErr.message}`);
+      }
+      return; // No candidate detected/served — skip silently (or log in --verbose).
     }
 
     const sourceName = `${seedId}-seed`;

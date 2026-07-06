@@ -305,26 +305,67 @@ export function toPortalEntry(company) {
   };
 }
 
+/**
+ * Like toPortalEntry(), but returns EVERY plausible PortalEntry candidate for
+ * a company, in probe order. toPortalEntry()'s single greenhouse-by-slug guess
+ * systematically misses companies on Ashby or Lever (most early-stage YC
+ * companies use Ashby) — callers that can afford a fetch-probe per candidate
+ * (scan-ats-full runSeedScan) should try these in order and keep the first
+ * board that actually serves jobs.
+ *
+ * Explicit ats/ats_id hints still short-circuit to a single candidate.
+ *
+ * @param {SeedCompany} company
+ * @returns {SeedPortalEntry[]}
+ */
+export function toPortalEntryCandidates(company) {
+  const hinted = toPortalEntry(company);
+  const atsId = company.ats_id && SLUG_RE.test(company.ats_id) ? company.ats_id : null;
+  if (atsId && company.ats) return [hinted];
+
+  const slug = company.slug && SLUG_RE.test(company.slug) ? company.slug : null;
+  if (!slug) return hinted.careers_url ? [hinted] : [];
+
+  const candidates = [
+    `https://job-boards.greenhouse.io/${slug}`,
+    `https://jobs.ashbyhq.com/${slug}`,
+    `https://jobs.lever.co/${slug}`,
+  ].map(careers_url => ({ name: company.name, careers_url, source: company.source }));
+  // Slugs are usually hyphenated ("code-metal"); greenhouse/ashby tokens are
+  // often the compact form — add compact variants when they differ.
+  const compact = slug.replace(/-/g, '');
+  if (compact !== slug && SLUG_RE.test(compact)) {
+    candidates.push(
+      { name: company.name, careers_url: `https://job-boards.greenhouse.io/${compact}`, source: company.source },
+      { name: company.name, careers_url: `https://jobs.ashbyhq.com/${compact}`, source: company.source },
+    );
+  }
+  if (company.url) candidates.push({ name: company.name, careers_url: company.url, source: company.source });
+  return candidates;
+}
+
 // ── Network fetchers ─────────────────────────────────────────────────
 
 /**
  * Fetch the Y Combinator public company list and return parsed SeedCompany entries.
  *
- * Uses the public YC API (no auth, no API key). The response is a JSON object
- * with a `companies` array. We fetch page 1 with a large per_page to get the
- * most recent batch; subsequent pages can be fetched if needed (most users want
- * the latest batch anyway).
+ * Uses the public YC API (no auth, no API key). The API IGNORES `per_page` and
+ * always returns 25 companies per page with `totalPages` (~241) and `nextPage`
+ * fields — the old "stop when a page has <1000" heuristic therefore terminated
+ * after page 1 and silently returned 25 of ~6,000 companies. Pagination now
+ * follows `totalPages`, newest batches first, up to `maxPages`.
  *
  * @param {{ timeoutMs?: number, maxPages?: number }} [opts]
  * @returns {Promise<SeedCompany[]>}
  */
-export async function fetchYCCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS, maxPages = 3 } = {}) {
+export async function fetchYCCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS, maxPages = 250 } = {}) {
   /** @type {SeedCompany[]} */
   const all = [];
   const seen = new Set();
+  let totalPages = maxPages;
 
-  for (let page = 1; page <= maxPages; page++) {
-    const url = `https://api.ycombinator.com/v0.1/companies?page=${page}&per_page=1000`;
+  for (let page = 1; page <= Math.min(maxPages, totalPages); page++) {
+    const url = `https://api.ycombinator.com/v0.1/companies?page=${page}`;
     let payload;
     try {
       const res = await fetchWithTimeout(url, { timeoutMs });
@@ -332,6 +373,11 @@ export async function fetchYCCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS, maxPage
     } catch (err) {
       if (page === 1) throw new Error(`vc-portfolios: YC API fetch failed — ${err.message}`);
       break; // Partial data is fine after page 1.
+    }
+
+    const raw = /** @type {any} */ (payload);
+    if (Number.isFinite(raw?.totalPages) && raw.totalPages > 0) {
+      totalPages = raw.totalPages;
     }
 
     const entries = parseYCPayload(payload);
@@ -343,11 +389,6 @@ export async function fetchYCCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS, maxPage
         all.push(e);
       }
     }
-
-    // The YC API pagination: stop when we receive fewer than 1000 companies.
-    const raw = /** @type {any} */ (payload);
-    const batchSize = Array.isArray(raw?.companies) ? raw.companies.length : 0;
-    if (batchSize < 1000) break;
   }
 
   return all;
