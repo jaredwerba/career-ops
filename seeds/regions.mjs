@@ -233,6 +233,71 @@ const BOSTON_COMPANIES = [
 ];
 
 /**
+ * AI-native ISVs — a THEMATIC seed using the same verified-board contract as
+ * the metro regions (the registry machinery is location-agnostic; only the
+ * --region flag's metro-keyword fallback is geographic, and this seed simply
+ * has no REGION_LOCATION_KEYWORDS entry, so the portals.yml location_filter
+ * applies unchanged). Curated from AI-50-caliber lists + national-sweep
+ * retries; every board live-probed with the board-name identity check.
+ * Last probe-verified: 2026-07-06.
+ */
+const AI_NATIVE_COMPANIES = [
+  { name: 'Airtable', ats: 'greenhouse', ats_id: 'airtable' },
+  { name: 'Apollo.io', ats: 'greenhouse', ats_id: 'apolloio' },
+  { name: 'Artisan', ats: 'ashby', ats_id: 'artisan' },
+  { name: 'Attio', ats: 'ashby', ats_id: 'attio' },
+  { name: 'Black Forest Labs', ats: 'greenhouse', ats_id: 'blackforestlabs' },
+  { name: 'Browserbase', ats: 'ashby', ats_id: 'browserbase' },
+  { name: 'Cartesia', ats: 'ashby', ats_id: 'cartesia' },
+  { name: 'Cognition', ats: 'ashby', ats_id: 'cognition' },
+  { name: 'Common Room', ats: 'ashby', ats_id: 'commonroom' },
+  { name: 'Dust', ats: 'ashby', ats_id: 'dust' },
+  { name: 'E2B', ats: 'ashby', ats_id: 'e2b' },
+  { name: 'Exa', ats: 'ashby', ats_id: 'exa' },
+  { name: 'Factory', ats: 'ashby', ats_id: 'factory' },
+  { name: 'Fal', ats: 'greenhouse', ats_id: 'fal' },
+  { name: 'Fathom', ats: 'ashby', ats_id: 'fathom' },
+  { name: 'Figure AI', ats: 'greenhouse', ats_id: 'figureai' },
+  { name: 'Firecrawl', ats: 'ashby', ats_id: 'firecrawl' },
+  { name: 'Gamma', ats: 'ashby', ats_id: 'gamma' },
+  { name: 'Gong', ats: 'greenhouse', ats_id: 'gongio' },
+  { name: 'Granola', ats: 'ashby', ats_id: 'granola' },
+  { name: 'HeyGen', ats: 'greenhouse', ats_id: 'heygen' },
+  { name: 'Hume AI', ats: 'greenhouse', ats_id: 'humeai' },
+  { name: 'Ideogram', ats: 'ashby', ats_id: 'ideogram' },
+  { name: 'Imbue', ats: 'greenhouse', ats_id: 'imbue' },
+  { name: 'Krea', ats: 'ashby', ats_id: 'krea' },
+  { name: 'LangChain', ats: 'ashby', ats_id: 'langchain' },
+  { name: 'Letta', ats: 'ashby', ats_id: 'letta' },
+  { name: 'Linear', ats: 'ashby', ats_id: 'linear' },
+  { name: 'Nooks', ats: 'greenhouse', ats_id: 'nooks' },
+  { name: 'Nous Research', ats: 'ashby', ats_id: 'nous' },
+  { name: 'Orum', ats: 'ashby', ats_id: 'orum' },
+  { name: 'Otter.ai', ats: 'greenhouse', ats_id: 'otterai' },
+  { name: 'Outreach', ats: 'lever', ats_id: 'outreach' },
+  { name: 'Physical Intelligence', ats: 'ashby', ats_id: 'physicalintelligence' },
+  { name: 'Pika', ats: 'ashby', ats_id: 'pika' },
+  { name: 'Prime Intellect', ats: 'ashby', ats_id: 'primeintellect' },
+  { name: 'Raycast', ats: 'ashby', ats_id: 'raycast' },
+  { name: 'Read AI', ats: 'ashby', ats_id: 'read-ai' },
+  { name: 'Reflection AI', ats: 'ashby', ats_id: 'reflectionai' },
+  { name: 'Replit', ats: 'ashby', ats_id: 'replit' },
+  { name: 'Rilla', ats: 'ashby', ats_id: 'rilla' },
+  { name: 'Rime', ats: 'ashby', ats_id: 'rime' },
+  { name: 'Runway ML', ats: 'ashby', ats_id: 'runway-ml' },
+  { name: 'Salesloft', ats: 'greenhouse', ats_id: 'salesloft' },
+  { name: 'SF Compute', ats: 'ashby', ats_id: 'sfcompute' },
+  { name: 'Stability AI', ats: 'greenhouse', ats_id: 'stabilityai' },
+  { name: 'Tenstorrent', ats: 'greenhouse', ats_id: 'tenstorrent' },
+  { name: 'Typeface', ats: 'greenhouse', ats_id: 'typeface' },
+  { name: 'Udio', ats: 'greenhouse', ats_id: 'udio' },
+  { name: 'Unify', ats: 'ashby', ats_id: 'unify' },
+  { name: 'World Labs', ats: 'greenhouse', ats_id: 'worldlabs' },
+  { name: 'You.com', ats: 'greenhouse', ats_id: 'youcom' },
+  { name: 'Zed Industries', ats: 'ashby', ats_id: 'zed' },
+];
+
+/**
  * Metro-area location keywords per region, used by `--region` as the default
  * `--location-allow` override. Matching is case-insensitive substring (same
  * semantics as portals.yml location_filter `allow`), so "remote" postings at
@@ -333,6 +398,7 @@ function loadLocalExtras(regionId) {
 
 const REGION_DATA = {
   boston: { companies: BOSTON_COMPANIES, label: 'Boston Metro Tech' },
+  'ai-native': { companies: AI_NATIVE_COMPANIES, label: 'AI-Native ISVs' },
 };
 
 /**

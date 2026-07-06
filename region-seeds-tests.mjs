@@ -78,8 +78,12 @@ for (const [regionId, source] of Object.entries(REGION_SEED_SOURCES)) {
   check(`${regionId}: every entry detect()s with its provider`, undetected.length === 0,
     undetected.slice(0, 5).join('; '));
 
-  check(`${regionId}: has metro location keywords`,
-    Array.isArray(REGION_LOCATION_KEYWORDS[regionId]) && REGION_LOCATION_KEYWORDS[regionId].length > 0);
+  // Metro keywords are optional — thematic seeds (e.g. ai-native) have none
+  // and fall back to the portals.yml location_filter; when present they must
+  // be a non-empty array.
+  const kw = REGION_LOCATION_KEYWORDS[regionId];
+  check(`${regionId}: location keywords absent or non-empty`,
+    kw === undefined || (Array.isArray(kw) && kw.length > 0));
 }
 
 // ── 3. SmartRecruiters freshness contract (region seeds depend on it) ─
