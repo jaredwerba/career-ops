@@ -97,7 +97,7 @@ export default {
  *
  * @param {any} json
  * @param {string} companyName
- * @returns {Array<{title: string, url: string, company: string, location: string, postedAt?: string}>}
+ * @returns {Array<{title: string, url: string, company: string, location: string, postedAt?: number}>}
  */
 export function parseSmartRecruitersResponse(json, companyName) {
   const items = json?.content;
@@ -129,8 +129,18 @@ export function parseSmartRecruitersResponse(json, companyName) {
     const job = { title: j.name || '', url, location, company: companyName };
     // releasedDate powers freshness gating in reverse scans (scan-ats-full.mjs
     // classifyPostingDate) — without it every SR posting classifies 'undated'
-    // and is silently dropped by default.
-    if (typeof j.releasedDate === 'string' && j.releasedDate) job.postedAt = j.releasedDate;
+    // and is silently dropped by default. Must be epoch ms, not an ISO string:
+    // classifyPostingDate compares numerically (string postedAt would make
+    // every posting, however old, classify 'keep').
+    const postedAt = toEpochMs(j.releasedDate);
+    if (postedAt !== undefined) job.postedAt = postedAt;
     return job;
   });
+}
+
+// Same helper as greenhouse/ashby/teamtailor — ISO date string → epoch ms.
+function toEpochMs(value) {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
 }
