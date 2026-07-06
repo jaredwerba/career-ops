@@ -156,14 +156,20 @@ const BOSTON_COMPANIES = [
  * explicit --location-allow including "remote" to widen.
  */
 export const REGION_LOCATION_KEYWORDS = {
-  // Town names + 'massachusetts' only — deliberately NOT the substring ', ma',
-  // which also matches ', Maryland', ', Maine', ', Madrid', ', Manila', …
-  // Postings that abbreviate to bare "MA" almost always name the town too.
+  // Two tiers, chosen against real false positives:
+  //  - Bare names only for towns that are unambiguous nationally.
+  //  - "town, ma" compounds for towns that exist in other states (Lexington KY,
+  //    Burlington VT, Wilmington DE, Cambridge UK, …). The compound matches
+  //    both "Lexington, MA" and "Lexington, Massachusetts" via substring.
+  //  - Deliberately NOT the bare substring ', ma' — it also matches
+  //    ', Maryland', ', Maine', ', Madrid', ', Manila', …
   boston: [
-    'boston', 'cambridge', 'somerville', 'watertown', 'waltham', 'burlington',
-    'needham', 'lexington', 'newton', 'quincy', 'medford', 'bedford',
-    'wilmington', 'framingham', 'marlborough', 'westborough', 'woburn',
-    'andover', 'billerica', 'natick', 'devens', 'massachusetts',
+    'boston', 'somerville', 'watertown', 'waltham', 'needham', 'natick',
+    'billerica', 'marlborough', 'westborough', 'woburn', 'devens',
+    'massachusetts',
+    'cambridge, ma', 'burlington, ma', 'lexington, ma', 'newton, ma',
+    'quincy, ma', 'medford, ma', 'bedford, ma', 'wilmington, ma',
+    'framingham, ma', 'andover, ma',
   ],
 };
 
