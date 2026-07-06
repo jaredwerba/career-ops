@@ -97,7 +97,7 @@ export default {
  *
  * @param {any} json
  * @param {string} companyName
- * @returns {Array<{title: string, url: string, company: string, location: string}>}
+ * @returns {Array<{title: string, url: string, company: string, location: string, postedAt?: string}>}
  */
 export function parseSmartRecruitersResponse(json, companyName) {
   const items = json?.content;
@@ -126,6 +126,11 @@ export function parseSmartRecruitersResponse(json, companyName) {
         url = `https://jobs.smartrecruiters.com/${companySlug}/${j.id}-${slugified}`;
       }
     }
-    return { title: j.name || '', url, location, company: companyName };
+    const job = { title: j.name || '', url, location, company: companyName };
+    // releasedDate powers freshness gating in reverse scans (scan-ats-full.mjs
+    // classifyPostingDate) — without it every SR posting classifies 'undated'
+    // and is silently dropped by default.
+    if (typeof j.releasedDate === 'string' && j.releasedDate) job.postedAt = j.releasedDate;
+    return job;
   });
 }

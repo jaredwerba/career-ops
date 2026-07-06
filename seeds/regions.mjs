@@ -29,7 +29,7 @@
  *   node seeds/regions.mjs boston --probe
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, realpathSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -156,11 +156,14 @@ const BOSTON_COMPANIES = [
  * explicit --location-allow including "remote" to widen.
  */
 export const REGION_LOCATION_KEYWORDS = {
+  // Town names + 'massachusetts' only — deliberately NOT the substring ', ma',
+  // which also matches ', Maryland', ', Maine', ', Madrid', ', Manila', …
+  // Postings that abbreviate to bare "MA" almost always name the town too.
   boston: [
     'boston', 'cambridge', 'somerville', 'watertown', 'waltham', 'burlington',
     'needham', 'lexington', 'newton', 'quincy', 'medford', 'bedford',
     'wilmington', 'framingham', 'marlborough', 'westborough', 'woburn',
-    'massachusetts', ', ma',
+    'andover', 'billerica', 'natick', 'devens', 'massachusetts',
   ],
 };
 
@@ -220,8 +223,16 @@ function loadLocalExtras(regionId) {
   if (!existsSync(LOCAL_EXTRAS_PATH)) return [];
   try {
     const data = JSON.parse(readFileSync(LOCAL_EXTRAS_PATH, 'utf-8'));
-    const list = data?.[regionId];
-    return Array.isArray(list) ? list : [];
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      console.error('⚠️  seeds/regions.local.json: ignored — top level must be an object keyed by region id, e.g. {"boston": [...]}');
+      return [];
+    }
+    const list = data[regionId];
+    if (list !== undefined && !Array.isArray(list)) {
+      console.error(`⚠️  seeds/regions.local.json: ignored — "${regionId}" must be an array of entries`);
+      return [];
+    }
+    return list ?? [];
   } catch (err) {
     console.error(`⚠️  seeds/regions.local.json: ignored — ${err.message}`);
     return [];
@@ -299,7 +310,16 @@ async function probeCli(regionId) {
   process.exit(dead ? 2 : 0);
 }
 
-const isMain = process.argv[1] && import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href;
+// realpath both sides so symlinked invocation and %-encoded path characters
+// don't defeat the comparison (no URL round-trip on argv).
+const isMain = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+})();
 if (isMain) {
   const regionId = process.argv[2];
   if (!regionId || !process.argv.includes('--probe')) {

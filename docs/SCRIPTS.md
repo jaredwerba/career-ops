@@ -272,7 +272,8 @@ node scan-ats-full.mjs --liveness              # Playwright-verify matches first
 node scan-ats-full.mjs --md-out notes/scans    # also write a dated markdown digest
 node scan-ats-full.mjs --seeds boston          # curated metro-region seed (seeds/regions.mjs)
 node scan-ats-full.mjs --region boston         # region seed + metro location filter (npm run scan:boston)
-node scan-ats-full.mjs --location-allow "boston,cambridge, ma"  # override portals.yml location_filter for one run
+node scan-ats-full.mjs --location-allow "boston,cambridge,waltham"  # override portals.yml location_filter for one run
+node scan-ats-full.mjs --location-allow "boston; remote"        # ';' separator for keywords containing commas
 ```
 
 **Metro regions:** `--region <id>` seeds the scan with a curated, probe-verified company list for a metro area (see `seeds/README.md`) and constrains locations to that metro's keywords unless `--location-allow` is passed explicitly. `--seeds <id>` uses the region list with your normal `portals.yml` location_filter instead. Verify a region list with `npm run seeds:probe`.

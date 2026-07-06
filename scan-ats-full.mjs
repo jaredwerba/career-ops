@@ -27,7 +27,8 @@
  *   node scan-ats-full.mjs --md-out <dir>       # also write a dated markdown digest to <dir>
  *   node scan-ats-full.mjs --seeds boston       # curated metro-region seed (seeds/regions.mjs)
  *   node scan-ats-full.mjs --region boston      # region seed + metro location filter in one flag
- *   node scan-ats-full.mjs --location-allow "boston,cambridge, ma"  # override portals.yml location_filter for this run
+ *   node scan-ats-full.mjs --location-allow "boston,cambridge,waltham"  # override portals.yml location_filter for this run
+ *   node scan-ats-full.mjs --location-allow "boston; remote"        # ';' separator for keywords containing commas
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
@@ -159,10 +160,12 @@ function parseArgs(argv) {
   }
   // --location-allow "kw1,kw2": replace portals.yml location_filter for this
   // run (allow-list semantics). Falls back to the region's metro keywords when
-  // --region is set without an explicit override.
+  // --region is set without an explicit override. Keywords that themselves
+  // contain a comma (e.g. the substring ", ma") can't survive comma-splitting,
+  // so a ';' anywhere in the value switches the separator to ';'.
   const locationAllowArg = valueOf('--location-allow');
   const locationAllow = locationAllowArg
-    ? locationAllowArg.split(',').map(s => s.trim()).filter(Boolean)
+    ? locationAllowArg.split(locationAllowArg.includes(';') ? ';' : ',').map(s => s.trim()).filter(Boolean)
     : (region ? REGION_LOCATION_KEYWORDS[region] ?? null : null);
   // When --seeds is the only discovery flag (no --ats), default --ats to none
   // so we don't also walk the full ATS directories unintentionally.
@@ -290,6 +293,7 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
   const cutoff = Date.now() - opts.sinceDays * 86_400_000;
   const offers = [];
   let errors = 0;
+  let droppedNoDate = 0;
 
   await parallelEach(capped, CONCURRENCY, async (company) => {
     const entry = toPortalEntry(company);
@@ -318,7 +322,7 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
       if (!job.url || !job.title) continue;
       const dateClass = classifyPostingDate(job, cutoff);
       if (dateClass === 'stale') continue;
-      if (dateClass === 'undated' && !opts.includeUndated) continue;
+      if (dateClass === 'undated' && !opts.includeUndated) { droppedNoDate++; continue; }
       if (!opts.titleFilter(job.title)) continue;
       if (!opts.locationFilter(job.location)) continue;
       if (seenUrls.has(job.url)) continue;
@@ -327,7 +331,7 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
     }
   });
 
-  return { offers, errors, total: capped.length };
+  return { offers, errors, droppedNoDate, total: capped.length };
 }
 
 // ── Parallel fetch with concurrency limit ───────────────────────────
@@ -487,8 +491,10 @@ async function main() {
     if (result && result.offers) {
       totalCompaniesScanned += result.total || 0;
       totalErrors += result.errors || 0;
+      droppedNoDate += result.droppedNoDate || 0;
       newOffers.push(...result.offers);
-      log(`  done — ${result.total} companies probed, ${result.offers.length} matches (${result.errors} errors)`);
+      const undatedNote = result.droppedNoDate ? `, ${result.droppedNoDate} undated skipped — use --include-undated to keep` : '';
+      log(`  done — ${result.total} companies probed, ${result.offers.length} matches (${result.errors} errors${undatedNote})`);
     }
   }
 

@@ -4,7 +4,7 @@ Complementary discovery paths for `scan-ats-full.mjs`: seed the company universe
 
 ## Metro regions (`regions.mjs`)
 
-"Scan every tech company in a city" — each region is a static, probe-verified company list (board exists on Greenhouse/Lever/Ashby/SmartRecruiters AND the board's company name matches). First region: **boston** (~90 companies, from AI/dev-tools through cybersecurity, healthtech, fintech, robotics, climate, and the Boston offices of large public-board companies).
+"Scan every tech company in a city" — each region is a static, curated company list whose boards were identity-verified at curation time (board exists on Greenhouse/Lever/Ashby/SmartRecruiters AND the board's own company name matches — same-token impostor boards are a real hazard). The `--probe` CLI re-checks that every board is still live and serving jobs. First region: **boston** (~90 companies, from AI/dev-tools through cybersecurity, healthtech, fintech, robotics, climate, and the Boston offices of large public-board companies).
 
 ```bash
 # Region seed + metro location filter in one flag
@@ -16,7 +16,7 @@ node scan-ats-full.mjs --seeds boston --since 7
 # Widen/replace the metro filter for one run
 node scan-ats-full.mjs --region boston --location-allow "boston,cambridge,remote"
 
-# Keep the list honest (also: npm run seeds:probe)
+# Re-check that every board is still live (also: npm run seeds:probe)
 node seeds/regions.mjs boston --probe
 ```
 
