@@ -45,10 +45,11 @@ const LOCAL_EXTRAS_PATH = path.join(path.dirname(fileURLToPath(import.meta.url))
 // ── Region data ──────────────────────────────────────────────────────
 
 /**
- * Boston metro tech companies with live, identity-verified ATS boards (~170).
- * Last probe-verified: 2026-07-06 (board exists + board name matches company).
+ * Boston metro tech companies with live, identity-verified ATS boards (~182).
+ * Last probe-verified: 2026-07-07 (board exists + board name matches company).
  * Sources: initial curated set + the mgmtboston.com "Boston Tech Big Board"
- * directory, each entry re-probed live against its ATS provider.
+ * + a Boston-top-200 CSV (ATS token taken from each careers link), each entry
+ * re-probed live against its ATS provider; dead boards pruned on each probe.
  *
  * Note for maintainers: companies on Workday or custom portals (e.g.
  * athenahealth, Rapid7, CyberArk, DraftKings, Wayfair's main board, PTC,
@@ -67,6 +68,8 @@ const BOSTON_COMPANIES = [
   { name: 'AgZen', ats: 'ashby', ats_id: 'agzen' },
   { name: 'airSlate', ats: 'lever', ats_id: 'airslate' },
   { name: 'Akoya', ats: 'greenhouse', ats_id: 'akoya' },
+  { name: 'AllSpice', ats: 'ashby', ats_id: 'allspice' },
+  { name: 'Amwell', ats: 'greenhouse', ats_id: 'amwell' },
   { name: 'Anthropic', ats: 'greenhouse', ats_id: 'anthropic' },
   { name: 'Arcadia', ats: 'lever', ats_id: 'arcadia' },
   { name: 'Arcee', ats: 'greenhouse', ats_id: 'arceeai' },
@@ -84,7 +87,6 @@ const BOSTON_COMPANIES = [
   { name: 'Bynder', ats: 'ashby', ats_id: 'bynder' },
   { name: 'Cambridge Mobile Telematics', ats: 'greenhouse', ats_id: 'cambridgemobiletelematics' },
   { name: 'CarGurus', ats: 'greenhouse', ats_id: 'cargurus' },
-  { name: 'Cascala Health', ats: 'greenhouse', ats_id: 'cascalahealth' },
   { name: 'Catena Labs', ats: 'ashby', ats_id: 'catena' },
   { name: 'Cellarity', ats: 'greenhouse', ats_id: 'cellarity' },
   { name: 'CircuitHub', ats: 'ashby', ats_id: 'circuithub' },
@@ -95,6 +97,7 @@ const BOSTON_COMPANIES = [
   { name: 'CodaMetrix', ats: 'ashby', ats_id: 'CodaMetrix' },
   { name: 'Code Metal', ats: 'ashby', ats_id: 'code-metal' },
   { name: 'Cohere Health', ats: 'greenhouse', ats_id: 'coherehealth' },
+  { name: 'Commonwealth Fusion Systems', ats: 'lever', ats_id: 'cfsenergy' },
   { name: 'Conduit', ats: 'ashby', ats_id: 'conduit' },
   { name: 'Constant Contact', ats: 'greenhouse', ats_id: 'constantcontact' },
   { name: 'Corvus Robotics', ats: 'ashby', ats_id: 'corvus-robotics' },
@@ -118,6 +121,7 @@ const BOSTON_COMPANIES = [
   { name: 'ezCater', ats: 'greenhouse', ats_id: 'ezcaterinc' },
   { name: 'Factorial Energy', ats: 'greenhouse', ats_id: 'factorialenergy' },
   { name: 'Fairmarkit', ats: 'greenhouse', ats_id: 'fairmarkit' },
+  { name: 'Field AI', ats: 'lever', ats_id: 'field-ai' },
   { name: 'Folia Health', ats: 'greenhouse', ats_id: 'foliahealth' },
   { name: 'Form Energy', ats: 'ashby', ats_id: 'formenergy' },
   { name: 'Form Health', ats: 'greenhouse', ats_id: 'formhealth' },
@@ -126,6 +130,7 @@ const BOSTON_COMPANIES = [
   { name: 'Ginkgo Bioworks', ats: 'greenhouse', ats_id: 'ginkgobioworks' },
   { name: 'Glimpse', ats: 'ashby', ats_id: 'glimpse' },
   { name: 'Gradient AI', ats: 'greenhouse', ats_id: 'gradientai' },
+  { name: 'Herald', ats: 'greenhouse', ats_id: 'heraldapi' },
   { name: 'Hi Marley', ats: 'greenhouse', ats_id: 'himarley' },
   { name: 'Hometap', ats: 'greenhouse', ats_id: 'hometap' },
   { name: 'Hopper', ats: 'ashby', ats_id: 'hopper' },
@@ -139,7 +144,9 @@ const BOSTON_COMPANIES = [
   { name: 'Klaviyo', ats: 'greenhouse', ats_id: 'klaviyo' },
   { name: 'knownwell', ats: 'ashby', ats_id: 'knownwell' },
   { name: 'Labviva', ats: 'greenhouse', ats_id: 'labviva' },
+  { name: 'Laminar', ats: 'lever', ats_id: 'runlaminar' },
   { name: 'Layer Health', ats: 'greenhouse', ats_id: 'layerhealth' },
+  { name: 'Lazarus AI', ats: 'greenhouse', ats_id: 'lazarusenterprises' },
   { name: 'Lendbuzz', ats: 'lever', ats_id: 'lendbuzz' },
   { name: 'Lightmatter', ats: 'greenhouse', ats_id: 'lightmatter' },
   { name: 'Lila Sciences', ats: 'greenhouse', ats_id: 'lilasciences' },
@@ -155,6 +162,7 @@ const BOSTON_COMPANIES = [
   { name: 'Mandrel', ats: 'ashby', ats_id: 'mandrel' },
   { name: 'Markforged', ats: 'greenhouse', ats_id: 'markforged' },
   { name: 'Maven AGI', ats: 'ashby', ats_id: 'maven-agi' },
+  { name: 'Merlin Labs', ats: 'lever', ats_id: 'merlinlabs' },
   { name: 'Mirakl', ats: 'greenhouse', ats_id: 'mirakl' },
   { name: 'Modulate', ats: 'lever', ats_id: 'modulate' },
   { name: 'MongoDB', ats: 'greenhouse', ats_id: 'mongodb' },
@@ -179,6 +187,7 @@ const BOSTON_COMPANIES = [
   { name: 'Owl Labs', ats: 'greenhouse', ats_id: 'owllabs' },
   { name: 'Paperless Parts', ats: 'greenhouse', ats_id: 'paperlessparts' },
   { name: 'PathAI', ats: 'greenhouse', ats_id: 'pathai' },
+  { name: 'Phoenix Tailings', ats: 'lever', ats_id: 'PhoenixTailings' },
   { name: 'Piaggio Fast Forward', ats: 'greenhouse', ats_id: 'piaggiofastforward' },
   { name: 'Pickle Robot', ats: 'lever', ats_id: 'picklerobot' },
   { name: 'Posh AI', ats: 'ashby', ats_id: 'posh-ai' },
@@ -188,15 +197,18 @@ const BOSTON_COMPANIES = [
   { name: 'Proton.ai', ats: 'greenhouse', ats_id: 'protonai' },
   { name: 'Pryzm', ats: 'ashby', ats_id: 'pryzm' },
   { name: 'QuEra Computing', ats: 'greenhouse', ats_id: 'queracomputinginc' },
+  { name: 'Realm.Security', ats: 'greenhouse', ats_id: 'realm' },
   { name: 'Recorded Future', ats: 'greenhouse', ats_id: 'recordedfuture' },
   { name: 'Reframe Systems', ats: 'ashby', ats_id: 'reframesystems' },
   { name: 'Reprise', ats: 'ashby', ats_id: 'reprise' },
+  { name: 'RevenueBase', ats: 'ashby', ats_id: 'revenuebase-inc' },
   { name: 'ReversingLabs', ats: 'smartrecruiters', ats_id: 'ReversingLabs' },
   { name: 'Rhino Federated Computing', ats: 'greenhouse', ats_id: 'rhinofederatedcomputing' },
   { name: 'Salsify', ats: 'greenhouse', ats_id: 'salsify' },
   { name: 'Scaled Cognition', ats: 'ashby', ats_id: 'scaled-cognition' },
   { name: 'Serif Biomedicines', ats: 'greenhouse', ats_id: 'serif' },
   { name: 'Seurat Technologies', ats: 'greenhouse', ats_id: 'seurat' },
+  { name: 'SimSpace', ats: 'ashby', ats_id: 'simspace-corporation' },
   { name: 'Skillsoft', ats: 'greenhouse', ats_id: 'skillsoft' },
   { name: 'SmartBear', ats: 'greenhouse', ats_id: 'smartbear' },
   { name: 'Snowflake', ats: 'ashby', ats_id: 'snowflake' },
@@ -221,6 +233,7 @@ const BOSTON_COMPANIES = [
   { name: 'Veeam', ats: 'greenhouse', ats_id: 'veeamsoftware' },
   { name: 'Veracode', ats: 'greenhouse', ats_id: 'veracode' },
   { name: 'Vestmark', ats: 'greenhouse', ats_id: 'vestmark' },
+  { name: 'Via Science', ats: 'greenhouse', ats_id: 'via99' },
   { name: 'Via Separations', ats: 'lever', ats_id: 'viaseparations' },
   { name: 'VideaHealth', ats: 'ashby', ats_id: 'videa.ai' },
   { name: 'VulnCheck', ats: 'greenhouse', ats_id: 'vulncheck' },
