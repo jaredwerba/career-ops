@@ -986,6 +986,14 @@ async function main() {
         emptyTargets.push(company.name);
       }
 
+      // Per-company location override: a tracked_companies / job_boards entry may
+      // carry its own `location_filter` (same shape as the global one) to opt a
+      // single company out of the global policy — e.g. an in-office-only company
+      // the user will relocate/commute for. Built once per company (cheap).
+      const effLocationFilter = company.location_filter
+        ? buildLocationFilter(company.location_filter)
+        : locationFilter;
+
       for (const job of jobs) {
         // Trust enrichment — runs before filters, never drops
         const trustResult = trustValidator(job);
@@ -1001,7 +1009,7 @@ async function main() {
           totalFilteredTier++;
           continue;
         }
-        if (!locationFilter(job.location)) {
+        if (!effLocationFilter(job.location)) {
           totalFilteredLocation++;
           continue;
         }

@@ -179,6 +179,18 @@ export async function validatePortalsConfig(config, { providerIds = new Set() } 
       }
 
       validateParser(company.parser, `${base}.parser`, errors);
+
+      // Optional per-company location_filter override (same shape as the global
+      // one) — lets a single company opt out of the global location policy.
+      if (company.location_filter !== undefined) {
+        if (!isObject(company.location_filter)) {
+          add(errors, `${base}.location_filter`, 'location_filter must be an object');
+        } else {
+          validateKeywordList(company.location_filter.always_allow, `${base}.location_filter.always_allow`, errors);
+          validateKeywordList(company.location_filter.allow, `${base}.location_filter.allow`, errors);
+          validateKeywordList(company.location_filter.block, `${base}.location_filter.block`, errors);
+        }
+      }
     }
   }
 
