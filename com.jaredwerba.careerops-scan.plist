@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jaredwerba.careerops-scan</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/jkw/careerops/run-daily-scans.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <!-- The 8am trigger alone loses any day the Mac is asleep or shut down at 8am
+       (that cost 6 days in July/August). RunAtLoad fires again at login/boot,
+       and run-daily-scans.sh exits immediately if today's sweep already ran, so
+       the extra trigger is a catch-up rather than a second scan. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/jkw/careerops/data/scan-logs/launchd.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/jkw/careerops/data/scan-logs/launchd.err</string>
+</dict>
+</plist>
