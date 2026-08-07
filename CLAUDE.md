@@ -380,4 +380,4 @@ Write one TSV file per evaluation to `batch/tracker-additions/{num}-{company-slu
 
 ## Candidate Fact Integrity (binding — added 2026-07-05)
 
-Candidate facts come exclusively from cv.md and modes/resume-factory-spec.md §3. The quarantine list in the spec §9 is binding. Never invent, inflate, or extrapolate a candidate fact.
+Candidate facts come exclusively from cv.md and modes/_resume-facts.md. The quarantine list in modes/resume-factory-spec.md §9 is binding. Never invent, inflate, or extrapolate a candidate fact.

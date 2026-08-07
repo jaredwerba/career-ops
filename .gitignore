@@ -104,3 +104,24 @@ plan/
 
 # Region seed user extras (seeds/regions.mjs)
 seeds/regions.local.json
+
+# ── Resume Factory: candidate facts (user layer — never commit, public fork)
+modes/_resume-facts.md
+
+# ── Generated dashboards (build artifacts; the local one embeds the tracker)
+dashboard-web/
+dashboard-public/
+
+# ── Personal browsing/click history and scan output
+data/clicks.csv
+data/click-events.csv
+data/clicks.csv.tmp
+data/scan-logs/
+data/shortlist-today.txt
+
+# ── local scratch
+.writetest
+_to_delete/
+
+# Resume content with real identity (user layer)
+resume-content.local.js

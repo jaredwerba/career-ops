@@ -41,7 +41,7 @@ Include Block G in the saved report. Add **URL:** {url} and **Legitimacy:** {tie
 
 ## Step 3 — Generate Resume
 
-**ALL resume/CV generation routes through `modes/resume-factory.md` (Resume Factory v2) — execute that pipeline for this step.** The `modes/pdf.md` HTML pipeline and `modes/latex.md` are NOT used for resumes; `pdf` remains in use only for cover letters. Candidate facts come exclusively from `cv.md` and `modes/resume-factory-spec.md` §3; the quarantine list in the spec §9 is binding.
+**ALL resume/CV generation routes through `modes/resume-factory.md` (Resume Factory v2) — execute that pipeline for this step.** The `modes/pdf.md` HTML pipeline and `modes/latex.md` are NOT used for resumes; `pdf` remains in use only for cover letters. Candidate facts come exclusively from `cv.md` and `modes/_resume-facts.md`; the quarantine list in `modes/resume-factory-spec.md` §9 is binding.
 
 ## Step 4 — Draft Application Answers (only if score >= 4.5)
 

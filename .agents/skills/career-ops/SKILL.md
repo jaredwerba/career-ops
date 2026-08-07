@@ -70,7 +70,7 @@ Determine the mode from `$mode`:
 
 If `$mode` is not a sub-command AND doesn't look like a JD, show discovery.
 
-**Resume routing rule (binding):** ALL resume/CV generation — including the auto-pipeline's CV step and any request for a resume, CV, or tailored application document — routes through `resume-factory` (`modes/resume-factory.md`, Resume Factory v2). The default `pdf` mode's HTML pipeline remains in use ONLY for cover letters. Candidate facts come exclusively from `cv.md` and `modes/resume-factory-spec.md` §3; the quarantine list in the spec §9 is binding. Never invent, inflate, or extrapolate a candidate fact.
+**Resume routing rule (binding):** ALL resume/CV generation — including the auto-pipeline's CV step and any request for a resume, CV, or tailored application document — routes through `resume-factory` (`modes/resume-factory.md`, Resume Factory v2). The default `pdf` mode's HTML pipeline remains in use ONLY for cover letters. Candidate facts come exclusively from `cv.md` and `modes/_resume-facts.md`; the quarantine list in `modes/resume-factory-spec.md` §9 is binding. Never invent, inflate, or extrapolate a candidate fact.
 
 ---
 
