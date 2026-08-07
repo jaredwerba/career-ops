@@ -23,7 +23,7 @@ background check.
    rules (§5) → draft to format spec (§6).
 4. Facts come ONLY from spec §3 (mirrored in `cv.md`). The quarantine list (spec §9)
    is binding: degree title/year, any CRM tool, unverified certifications, and the
-   $1.3M ARR figure never print.
+   the ARR figure flagged as omitted in `modes/_resume-facts.md` must never print.
 5. Build the .docx by editing ONLY the `CONTENT` object in `resume_build_template.js`
    (project root), then run:
    `node resume_build_template.js`
@@ -41,7 +41,7 @@ background check.
    [ ] pdftotext linear-order check clean
    [ ] "Oracle Cloud Infrastructure (OCI)" spelled out on first use; en-dash dates
    A resume may not be delivered with any item unchecked.
-8. Save outputs to `output/Jared_Werba_Resume_{Company}_{Role}.docx` and `.pdf`.
+8. Save outputs to `output/{Lastname}_{Firstname}_Resume_{Company}_{Role}.docx` and `.pdf`.
 9. Log to the tracker with the standard fields; note in the entry that the PDF came
    from the resume-factory pipeline (the dashboard's HTML-regenerate hotkey does not
    apply to these files).
