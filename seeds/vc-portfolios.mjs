@@ -414,6 +414,213 @@ export async function fetchA16zCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}
   return parseA16zPayload(html);
 }
 
+// ── Enterprise/Boston VC portfolios (added 2026-08-07) ───────────────
+//
+// Five more portfolios whose companies skew enterprise-SaaS/infra — the
+// selling profile this system targets. Every endpoint below was verified
+// fetchable with plain HTTP (no JS rendering, no auth beyond public
+// search-only keys) on 2026-08-07; each fetcher throws on failure so
+// runSeedScan logs the miss instead of silently scanning nothing.
+// Parsers are pure functions (string/JSON in, SeedCompany[] out) so they
+// can be fixture-tested without network, like parseA16zPayload above.
+
+/** Shared: derive a probe slug from a display name (same rule as a16z). */
+function nameToSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/** Shared: minimal HTML entity decode for the entities these pages emit. */
+function decodeEntities(s) {
+  return String(s)
+    .replace(/&amp;/g, '&').replace(/&#8217;|&rsquo;/g, "'").replace(/&#8211;|&ndash;/g, '–')
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .trim();
+}
+
+/** Shared: names → deduped SeedCompany[] (skips unslugables). */
+function namesToSeedCompanies(names, source) {
+  /** @type {Map<string, SeedCompany>} */
+  const seen = new Map();
+  for (const raw of names) {
+    const name = decodeEntities(raw);
+    if (!name || name.length < 2) continue;
+    const slug = nameToSlug(name);
+    if (!slug || !SLUG_RE.test(slug) || seen.has(slug)) continue;
+    seen.set(slug, { name, slug, source });
+  }
+  return [...seen.values()];
+}
+
+/**
+ * General Catalyst — Algolia search index (public search-only key, hardcoded
+ * in their site bundle; if rotated, the current constants live in
+ * assets.slater.app/slater/20127/60751.js).
+ */
+const GC_ALGOLIA_URL = 'https://ID4635ZLKJ-dsn.algolia.net/1/indexes/gc_primary/query';
+const GC_ALGOLIA_HEADERS = {
+  'X-Algolia-Application-Id': 'ID4635ZLKJ',
+  'X-Algolia-API-Key': '871677f0423646c1278b67120f5adcc0',
+  'content-type': 'application/json',
+};
+
+/** @param {any} json Algolia response */
+export function parseGeneralCatalystPayload(json) {
+  const hits = Array.isArray(json?.hits) ? json.hits : [];
+  // Booleans on each hit allow status filtering — keep active holdings only.
+  const names = hits
+    .filter(h => h && typeof h.name === 'string' && !h.alumni && !h.acquired)
+    .map(h => h.name);
+  return namesToSeedCompanies(names, 'general-catalyst');
+}
+
+export async function fetchGeneralCatalystCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(GC_ALGOLIA_URL, {
+      method: 'POST',
+      headers: GC_ALGOLIA_HEADERS,
+      body: JSON.stringify({ params: 'query=&hitsPerPage=1000&facetFilters=%5B%22type%3APortfolio%22%5D' }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return parseGeneralCatalystPayload(await res.json());
+  } catch (err) {
+    throw new Error(`vc-portfolios: general-catalyst fetch failed — ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Insight Partners — WP JSON endpoint, 12 rows/page. The response body is
+ * DOUBLE-encoded JSON (a JSON string containing JSON) — decode twice.
+ */
+const INSIGHT_API = 'https://www.insightpartners.com/wp-json/insight/v1/get-companies';
+
+/** @param {any} payload one decoded page ({max, rows}) */
+export function parseInsightPage(payload) {
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  return rows.filter(r => r && typeof r.name === 'string').map(r => r.name);
+}
+
+export async function fetchInsightCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS, maxPages = 80 } = {}) {
+  const names = [];
+  let totalPages = 1;
+  for (let page = 1; page <= Math.min(totalPages, maxPages); page++) {
+    let payload;
+    try {
+      const res = await fetchWithTimeout(`${INSIGHT_API}?page=${page}`, { timeoutMs });
+      let body = await res.text();
+      payload = JSON.parse(body);
+      if (typeof payload === 'string') payload = JSON.parse(payload); // double-encoded
+    } catch (err) {
+      if (page === 1) throw new Error(`vc-portfolios: insight fetch failed — ${err.message}`);
+      break; // partial list beats none once we have pages
+    }
+    if (page === 1) {
+      const max = Number(payload?.max);
+      if (Number.isFinite(max) && max > 0) totalPages = Math.ceil(max / 12);
+    }
+    const pageNames = parseInsightPage(payload);
+    if (!pageNames.length) break;
+    names.push(...pageNames);
+  }
+  return namesToSeedCompanies(names, 'insight');
+}
+
+/**
+ * Battery Ventures — server-rendered all-companies page. Entries ending in
+ * " *" are exited investments (page footnote) and are dropped.
+ */
+const BATTERY_URL = 'https://www.battery.com/list-of-all-companies/';
+
+/** @param {string} html */
+export function parseBatteryHtml(html) {
+  const names = [];
+  for (const m of String(html).matchAll(/<p><span style="font-weight: 400;">([^<]+)<\/span><\/p>/g)) {
+    let name = decodeEntities(m[1]);
+    if (/\*\s*$/.test(name)) continue; // exited investment
+    // Prefer the operating name; strip tickers and legal suffixes.
+    const dba = name.match(/\(dba ([^)]+)\)/i);
+    if (dba) name = dba[1].trim();
+    name = name.replace(/\((?:NASDAQ|NYSE|LSE|TSX|ASX)[^)]*\)/gi, '')
+      .replace(/,?\s+(Inc\.?|LLC|Ltd\.?|GmbH|AB|B\.V\.|LP|Corp\.?|Co\.)$/i, '')
+      .trim();
+    if (name) names.push(name);
+  }
+  return namesToSeedCompanies(names, 'battery');
+}
+
+export async function fetchBatteryCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  try {
+    const res = await fetchWithTimeout(BATTERY_URL, { timeoutMs });
+    return parseBatteryHtml(await res.text());
+  } catch (err) {
+    throw new Error(`vc-portfolios: battery fetch failed — ${err.message}`);
+  }
+}
+
+/** Bessemer Venture Partners — server-rendered companies page (~1.5MB). */
+const BVP_URL = 'https://www.bvp.com/companies';
+
+/** @param {string} html */
+export function parseBessemerHtml(html) {
+  const names = [];
+  for (const m of String(html).matchAll(/<a href="https:\/\/www\.bvp\.com\/companies\/[^"]+" class="name click-to-open">([^<]+)<\/a>/g)) {
+    names.push(m[1]);
+  }
+  return namesToSeedCompanies(names, 'bessemer');
+}
+
+export async function fetchBessemerCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  try {
+    const res = await fetchWithTimeout(BVP_URL, { timeoutMs });
+    return parseBessemerHtml(await res.text());
+  } catch (err) {
+    throw new Error(`vc-portfolios: bessemer fetch failed — ${err.message}`);
+  }
+}
+
+/**
+ * Sequoia Capital — server-rendered FacetWP pagination (?_paged=N, 52/page).
+ * total_pages is read from the embedded FWP_JSON in page 1.
+ */
+const SEQUOIA_URL = 'https://www.sequoiacap.com/our-companies/';
+
+/** @param {string} html one page */
+export function parseSequoiaHtml(html) {
+  const names = [];
+  for (const m of String(html).matchAll(/company-listing__head"[^>]*>(.*?)<\//g)) {
+    const name = decodeEntities(m[1].replace(/<[^>]+>/g, ''));
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+export async function fetchSequoiaCompanies({ timeoutMs = DEFAULT_TIMEOUT_MS, maxPages = 20 } = {}) {
+  const names = [];
+  let totalPages = 1;
+  for (let page = 1; page <= Math.min(totalPages, maxPages); page++) {
+    let html;
+    try {
+      const res = await fetchWithTimeout(`${SEQUOIA_URL}?_paged=${page}`, { timeoutMs });
+      html = await res.text();
+    } catch (err) {
+      if (page === 1) throw new Error(`vc-portfolios: sequoia fetch failed — ${err.message}`);
+      break;
+    }
+    if (page === 1) {
+      const tp = html.match(/"total_pages"\s*:\s*(\d+)/);
+      if (tp) totalPages = Number(tp[1]);
+    }
+    const pageNames = parseSequoiaHtml(html);
+    if (!pageNames.length) break;
+    names.push(...pageNames);
+  }
+  return namesToSeedCompanies(names, 'sequoia');
+}
+
 // ── SEED_SOURCES registry ────────────────────────────────────────────
 
 /**
@@ -434,5 +641,25 @@ export const SEED_SOURCES = {
   a16z: {
     fetch: fetchA16zCompanies,
     label: 'Andreessen Horowitz (a16z) Portfolio',
+  },
+  gc: {
+    fetch: fetchGeneralCatalystCompanies,
+    label: 'General Catalyst Portfolio',
+  },
+  insight: {
+    fetch: fetchInsightCompanies,
+    label: 'Insight Partners Portfolio',
+  },
+  battery: {
+    fetch: fetchBatteryCompanies,
+    label: 'Battery Ventures Portfolio',
+  },
+  bessemer: {
+    fetch: fetchBessemerCompanies,
+    label: 'Bessemer Venture Partners Portfolio',
+  },
+  sequoia: {
+    fetch: fetchSequoiaCompanies,
+    label: 'Sequoia Capital Portfolio',
   },
 };
