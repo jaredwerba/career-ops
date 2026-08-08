@@ -55,18 +55,29 @@ if (existsSync('data/applications.md')) {
 const cutoff = new Date(Date.now() - DAYS * 864e5).toISOString().slice(0, 10);
 
 const scored = [];
+// Companies outside the curated tech-tags list used to be skipped outright —
+// which silently dropped ~3/4 of scanned rows (incl. e.g. Zscaler "AE, Majors"
+// before it was tagged). High scorers among them now surface in their own
+// section below; the bar is naturally higher since they get no tech bonus.
+const UNLISTED_MIN_SCORE = 12;
+const UNLISTED_CAP = 10;
+const unlisted = [];
 for (const r of rows) {
   if ((r.first_seen || '') < cutoff) continue;
 
   const title = r.title || '';
   const tech = classifyTech(r.company);
-  if (!tech && !INCLUDE_NON_TECH) continue;
   if (!tech && VERTICAL_NOISE.test(title)) continue;
 
   const fit = scoreJob({ title, location: r.location || '', company: r.company, tech, applied });
   if (!fit) continue;   // no role archetype matched — not a seat worth ranking
 
-  scored.push({ ...r, tech, score: fit.score, blockers: fit.blockers });
+  const row = { ...r, tech: tech || '', score: fit.score, blockers: fit.blockers };
+  if (!tech && !INCLUDE_NON_TECH) {
+    if (fit.score >= UNLISTED_MIN_SCORE) unlisted.push(row);
+    continue;
+  }
+  scored.push(row);
 }
 
 scored.sort((a, b) => b.score - a.score || (b.first_seen || '').localeCompare(a.first_seen || ''));
@@ -86,6 +97,24 @@ if (URLS_ONLY) {
     );
     console.log(`       ${(r.location || '').slice(0, 60)}`);
     console.log(`       ${r.url}`);
+  }
+
+  // Unlisted-company section: additive only — the main ranked list above and
+  // --urls output are byte-identical to before this section existed.
+  if (unlisted.length) {
+    unlisted.sort((a, b) => b.score - a.score || (b.first_seen || '').localeCompare(a.first_seen || ''));
+    const utop = unlisted.slice(0, UNLISTED_CAP);
+    console.log(`\n  Unlisted companies — ${unlisted.length} scored ≥${UNLISTED_MIN_SCORE} outside the curated tech list, top ${utop.length}:`);
+    console.log('  ' + '─'.repeat(104));
+    for (const r of utop) {
+      const flag = r.blockers.length ? `  ⚠ ${r.blockers.join(', ')}` : '';
+      console.log(
+        `  ${String(r.score).padStart(3)}  ${(r.first_seen || '').padEnd(11)} ` +
+        `${'—'.padEnd(15)} ${(r.company || '').slice(0, 21).padEnd(21)} ${(r.title || '').slice(0, 44)}${flag}`
+      );
+      console.log(`       ${(r.location || '').slice(0, 60)}`);
+      console.log(`       ${r.url}`);
+    }
   }
   console.log('');
 }
