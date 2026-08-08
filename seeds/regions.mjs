@@ -32,6 +32,7 @@
 import { existsSync, readFileSync, realpathSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { TOP_COMPANIES } from './top-companies.mjs';
 
 /** Safe charset for slugs interpolated into ATS URLs (mirrors scan-ats-full.mjs). */
 export const SLUG_RE = /^[A-Za-z0-9._-]+$/;
@@ -308,6 +309,35 @@ const AI_NATIVE_COMPANIES = [
   { name: 'World Labs', ats: 'greenhouse', ats_id: 'worldlabs' },
   { name: 'You.com', ats: 'greenhouse', ats_id: 'youcom' },
   { name: 'Zed Industries', ats: 'ashby', ats_id: 'zed' },
+  // ── AI-native wave additions (probe-verified 2026-08-07) ──
+  { name: 'Anyscale', ats: 'ashby', ats_id: 'anyscale' },
+  { name: 'LlamaIndex', ats: 'ashby', ats_id: 'llamaindex' },
+  { name: 'Vectara', ats: 'greenhouse', ats_id: 'vectara' },
+  { name: 'Galileo', ats: 'greenhouse', ats_id: 'galileo' },
+  { name: 'HiddenLayer', ats: 'greenhouse', ats_id: 'hiddenlayer' },
+  { name: 'Dropzone AI', ats: 'greenhouse', ats_id: 'dropzoneai' },
+  { name: 'Fiddler AI', ats: 'ashby', ats_id: 'fiddler-ai' },
+  { name: 'Turing', ats: 'greenhouse', ats_id: 'turing' },
+  { name: 'Snorkel AI', ats: 'greenhouse', ats_id: 'snorkelai' },
+  { name: 'Poolside', ats: 'ashby', ats_id: 'poolside' },
+  { name: 'Invisible Technologies', ats: 'smartrecruiters', ats_id: 'invisibletechnologies' },
+  { name: 'Kore.ai', ats: 'smartrecruiters', ats_id: 'koreai' },
+  { name: 'Vellum', ats: 'ashby', ats_id: 'vellum' },
+  { name: 'Observe.AI', ats: 'greenhouse', ats_id: 'observeai' },
+  { name: 'PolyAI', ats: 'greenhouse', ats_id: 'polyai' },
+  { name: 'AssemblyAI', ats: 'greenhouse', ats_id: 'assemblyai' },
+  { name: 'Vapi', ats: 'ashby', ats_id: 'vapi' },
+  { name: 'Tavus', ats: 'ashby', ats_id: 'tavus' },
+  { name: 'Luma AI', ats: 'ashby', ats_id: 'lumaai' },
+  { name: 'Retell AI', ats: 'ashby', ats_id: 'retell-ai' },
+  { name: 'Regie.ai', ats: 'greenhouse', ats_id: 'regie' },
+  { name: 'People.ai', ats: 'lever', ats_id: 'people-ai' },
+  { name: 'Norm Ai', ats: 'ashby', ats_id: 'norm-ai' },
+  { name: 'Rogo', ats: 'ashby', ats_id: 'rogo' },
+  { name: 'Paradox', ats: 'ashby', ats_id: 'paradox' },
+  { name: 'Dataiku', ats: 'greenhouse', ats_id: 'dataiku' },
+  { name: 'DeepL', ats: 'ashby', ats_id: 'deepl' },
+  { name: 'Sourcegraph', ats: 'greenhouse', ats_id: 'sourcegraph91' },
 ];
 
 /**
@@ -412,6 +442,9 @@ function loadLocalExtras(regionId) {
 const REGION_DATA = {
   boston: { companies: BOSTON_COMPANIES, label: 'Boston Metro Tech' },
   'ai-native': { companies: AI_NATIVE_COMPANIES, label: 'AI-Native ISVs' },
+  // Ranked elite-companies seed (seeds/top-companies.mjs) — the OpenAI/
+  // Databricks/Wiz tier, identity-verified boards only. --seeds top250
+  top250: { companies: TOP_COMPANIES, label: 'Top-250 Elite Tech' },
 };
 
 /**
