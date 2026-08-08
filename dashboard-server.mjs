@@ -13,6 +13,7 @@
 import { createServer } from 'http';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join, normalize, extname } from 'path';
+import { spawn } from 'child_process';
 import { readClicks, writeClicks, recordClick, deleteClick, mergeClicks, appendEvent, CLICKS_CSV } from './lib/clicks-store.mjs';
 
 const args = process.argv.slice(2);
@@ -46,10 +47,128 @@ function readBody(req, limit = 5 * 1024 * 1024) {
   });
 }
 
+// ── sweep runner ───────────────────────────────────────────────────────────
+// The dashboard's RUN SCAN button posts here. This endpoint EXECUTES A SHELL
+// SCRIPT, so it is deliberately narrow:
+//   * the command is a fixed constant — no part of any request reaches it, and
+//     spawn() is called with an argv array (never a shell string), so there is
+//     nothing to inject into;
+//   * requireLocal() rejects anything whose Host header isn't this loopback
+//     port (DNS-rebinding defense) or whose Origin is a different site (CSRF —
+//     without it, any page you visit could POST here and kick off a sweep);
+//   * one sweep at a time.
+const SWEEP_CMD = ['/bin/zsh', ['run-daily-scans.sh', '--force']];
+const MAX_BUFFERED_LINES = 4000;
+
+const sweep = {
+  running: false, proc: null, startedAt: null, exitCode: null,
+  lines: [], clients: new Set(),
+};
+
+function requireLocal(req) {
+  const host = String(req.headers.host || '').toLowerCase();
+  if (host !== `127.0.0.1:${PORT}` && host !== `localhost:${PORT}`) return false;
+  const origin = req.headers.origin;
+  if (!origin) return true; // same-origin fetches may omit it
+  return origin === `http://127.0.0.1:${PORT}` || origin === `http://localhost:${PORT}`;
+}
+
+function broadcast(event, data) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of sweep.clients) {
+    try { res.write(payload); } catch { sweep.clients.delete(res); }
+  }
+}
+
+function pushLine(line) {
+  sweep.lines.push(line);
+  if (sweep.lines.length > MAX_BUFFERED_LINES) sweep.lines.shift();
+  broadcast('line', line);
+}
+
+function startSweep() {
+  if (sweep.running) return { started: false, alreadyRunning: true };
+  sweep.running = true;
+  sweep.startedAt = new Date().toISOString();
+  sweep.exitCode = null;
+  sweep.lines = [];
+
+  const [cmd, cmdArgs] = SWEEP_CMD;
+  // CAREEROPS_STREAM makes the script emit plain, line-oriented progress
+  // (no spinner escapes / carriage returns) — readable in a browser pane.
+  const proc = spawn(cmd, cmdArgs, {
+    cwd: process.cwd(),
+    env: { ...process.env, CAREEROPS_STREAM: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  sweep.proc = proc;
+
+  let buf = '';
+  const onData = (chunk) => {
+    buf += chunk.toString();
+    const parts = buf.split('\n');
+    buf = parts.pop() ?? '';
+    for (const line of parts) pushLine(line);
+  };
+  proc.stdout.on('data', onData);
+  proc.stderr.on('data', onData);
+
+  proc.on('error', (err) => {
+    pushLine(`! failed to start sweep: ${err.message}`);
+    sweep.running = false; sweep.proc = null; sweep.exitCode = -1;
+    broadcast('done', { exitCode: -1 });
+  });
+  proc.on('close', (code) => {
+    if (buf.trim()) pushLine(buf);
+    sweep.running = false; sweep.proc = null; sweep.exitCode = code;
+    console.log(`sweep finished (exit ${code})`);
+    broadcast('done', { exitCode: code });
+  });
+
+  console.log('sweep started via dashboard button');
+  return { started: true, alreadyRunning: false };
+}
+
 const server = createServer(async (req, res) => {
   let url;
   try { url = new URL(req.url, 'http://localhost'); } catch { return json(res, 400, { error: 'bad url' }); }
   const path = url.pathname;
+
+  // ── sweep API ──────────────────────────────────────────────────────────────
+  if (path === '/api/scan') {
+    if (req.method === 'POST') {
+      if (!requireLocal(req)) return json(res, 403, { ok: false, error: 'local origin required' });
+      const r = startSweep();
+      return json(res, 200, { ok: true, ...r, startedAt: sweep.startedAt });
+    }
+    if (req.method === 'GET') {
+      return json(res, 200, {
+        ok: true, running: sweep.running, startedAt: sweep.startedAt,
+        exitCode: sweep.exitCode, lines: sweep.lines.slice(-200),
+      });
+    }
+    return json(res, 405, { ok: false, error: 'method not allowed' });
+  }
+
+  // Server-sent events: replay what the sweep has emitted so far, then stream.
+  // Reconnecting mid-sweep therefore shows full history, not just the tail.
+  if (path === '/api/scan/stream' && req.method === 'GET') {
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+      'x-accel-buffering': 'no',
+    });
+    res.write('retry: 2000\n\n');
+    for (const line of sweep.lines) res.write(`event: line\ndata: ${JSON.stringify(line)}\n\n`);
+    if (!sweep.running && sweep.exitCode !== null) {
+      res.write(`event: done\ndata: ${JSON.stringify({ exitCode: sweep.exitCode })}\n\n`);
+    }
+    sweep.clients.add(res);
+    const keepAlive = setInterval(() => { try { res.write(': ping\n\n'); } catch {} }, 20000);
+    req.on('close', () => { clearInterval(keepAlive); sweep.clients.delete(res); });
+    return;
+  }
 
   // ── click log API ──────────────────────────────────────────────────────────
   if (path === '/api/clicks') {

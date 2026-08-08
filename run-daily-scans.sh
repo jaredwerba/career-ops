@@ -27,6 +27,13 @@ fi
 INTERACTIVE=0
 [ -t 1 ] && INTERACTIVE=1
 
+# CAREEROPS_STREAM=1 (set by dashboard-server.mjs behind the RUN SCAN button):
+# emit plain, line-oriented progress — no spinner, no carriage returns, no
+# colour — so it renders correctly in a browser pane. Mutually exclusive with
+# the TTY animation.
+STREAM=${CAREEROPS_STREAM:-0}
+if [ "$STREAM" = "1" ]; then INTERACTIVE=0; fi
+
 # ── animated phase runner (interactive only) ─────────────────────────────
 # Array, not a string: ${str:offset:1} slices BYTES under a C locale and
 # shreds multibyte braille glyphs — array elements are always whole.
@@ -53,6 +60,20 @@ run_phase() {
   local title="$1"; shift
   PHASE_N=$(( PHASE_N + 1 ))
   echo "--- $title ---" >> "$LOG"
+
+  if [ "$STREAM" = "1" ]; then
+    print -r -- "PHASE $PHASE_N/$PHASE_TOTAL start $title"
+    local sstart=$SECONDS rc=0
+    : > "$TMPOUT"
+    "$@" > "$TMPOUT" 2>&1 || rc=$?
+    local n
+    n=$(grep -c '^ *+ ' "$TMPOUT" 2>/dev/null) || n=0
+    TOTAL_NEW=$(( TOTAL_NEW + n ))
+    grep '^ *+ ' "$TMPOUT" 2>/dev/null | head -10 | sed 's/^ *+ /+ /'
+    print -r -- "PHASE $PHASE_N/$PHASE_TOTAL done $(( SECONDS - sstart ))s ${n} new rc=$rc"
+    cat "$TMPOUT" >> "$LOG"
+    return 0
+  fi
 
   if (( ! INTERACTIVE )); then
     "$@" >> "$LOG" 2>&1 || true
@@ -99,7 +120,7 @@ run_phase() {
 
 say_both() {
   echo "$1" >> "$LOG"
-  (( INTERACTIVE )) && echo "$1"
+  if (( INTERACTIVE )) || [ "$STREAM" = "1" ]; then echo "$1"; fi
 }
 
 say_both "===== career-ops daily sweep: $(date) ====="
@@ -117,6 +138,8 @@ say_both "===== done: $(date) ====="
 if (( INTERACTIVE )); then
   printf '\n \033[32m█\033[0m Sweep complete in %dm%02ds · \033[33m%d new offers\033[0m · log: %s\n' \
     $(( (SECONDS - SWEEP_START) / 60 )) $(( (SECONDS - SWEEP_START) % 60 )) "$TOTAL_NEW" "$LOG"
+elif [ "$STREAM" = "1" ]; then
+  print -r -- "SWEEP done $(( (SECONDS - SWEEP_START) / 60 ))m$(( (SECONDS - SWEEP_START) % 60 ))s ${TOTAL_NEW} new"
 fi
 
 # Ranked shortlist to its own file — this is the handoff to Claude ("build

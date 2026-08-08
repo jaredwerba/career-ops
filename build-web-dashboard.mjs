@@ -1145,38 +1145,124 @@ const html = `<!doctype html>
     return out;
   }
 
-  btn.addEventListener('click', function(){
-    if (btn.disabled) return;
-    btn.disabled = true;
-    btn.textContent = 'SCANNING…';
+  // Served over http by dashboard-server.mjs? Then the button runs the REAL
+  // sweep and streams its output. Opened as a file:// page there is no server
+  // to ask, and a browser cannot shell out — so say so plainly rather than
+  // animating a scan that isn't happening.
+  var LIVE = location.protocol === 'http:' || location.protocol === 'https:';
+
+  function emit(text, cls) {
+    var row = document.createElement('div');
+    row.className = 'term-line' + (cls ? ' ' + cls : '');
+    row.textContent = text;
+    term.appendChild(row);
+    term.scrollTop = term.scrollHeight;
+  }
+
+  function openTerm() {
     wrap.style.display = 'block';
     term.style.display = 'block';
     term.innerHTML = '';
     bar.style.transition = 'none';
     bar.style.width = '0%';
     void bar.offsetWidth;
+    bar.style.transition = 'width 400ms linear';
+  }
 
-    var lines = buildLines();
-    var totalMs = 4800;
-    bar.style.transition = 'width ' + totalMs + 'ms linear';
+  if (!LIVE) {
+    btn.textContent = '⟳ RUN SCAN';
+    btn.title = 'Requires the local dashboard server';
+    btn.addEventListener('click', function(){
+      openTerm();
+      wrap.style.display = 'none';
+      emit('[!] This page is open from a file, so it cannot run commands.', 'term-hi');
+      emit('');
+      emit('    Start the server, then use http://localhost:8787 instead:');
+      emit('');
+      emit('      cd ~/careerops && node dashboard-server.mjs', 'term-hi');
+      emit('');
+      emit('    The RUN SCAN button works there, and opens/clicks persist to');
+      emit('    data/clicks.csv instead of just this browser.');
+    });
+    return;
+  }
+
+  btn.textContent = '▶ RUN SCAN';
+  btn.title = 'Run the full discovery sweep (~15-30 min)';
+
+  var es = null;
+  function finish(msg, cls) {
+    if (es) { es.close(); es = null; }
     bar.style.width = '100%';
+    btn.disabled = false;
+    btn.textContent = '▶ RUN SCAN';
+    if (msg) emit(msg, cls || 'term-hi');
+  }
 
-    var i = 0;
-    var perLine = Math.max(55, Math.floor(totalMs / lines.length));
-    var timer = setInterval(function(){
-      if (i >= lines.length) {
-        clearInterval(timer);
-        setTimeout(function(){ location.reload(); }, 500);
+  function attachStream() {
+    es = new EventSource('/api/scan/stream');
+    es.addEventListener('line', function(ev){
+      var line = '';
+      try { line = JSON.parse(ev.data); } catch (e) { line = String(ev.data); }
+      if (!line) return;
+      // "PHASE 3/9 start ..." / "PHASE 3/9 done 142s 3 new rc=0" drive the bar.
+      var m = line.match(/^PHASE (\\d+)\\/(\\d+) (start|done) (.*)$/);
+      if (m) {
+        var n = parseInt(m[1], 10), total = parseInt(m[2], 10);
+        var pct = Math.round(((m[3] === 'done' ? n : n - 1) / total) * 100);
+        bar.style.width = pct + '%';
+        if (m[3] === 'start') {
+          emit('[' + n + '/' + total + '] ' + m[4] + ' …', 'term-hi');
+        } else {
+          emit('      ' + m[4].replace(/rc=0$/, '').trim(), 'term-net');
+        }
         return;
       }
-      var row = document.createElement('div');
-      row.className = 'term-line' + (lines[i].cls ? ' ' + lines[i].cls : '');
-      row.textContent = lines[i].text;
-      term.appendChild(row);
-      term.scrollTop = term.scrollHeight;
-      i++;
-    }, perLine);
+      if (line.indexOf('SWEEP done') === 0) { emit(line, 'term-hi'); return; }
+      emit(line, line.charAt(0) === '+' ? 'term-hi' : '');
+    });
+    es.addEventListener('done', function(ev){
+      var code = 0;
+      try { code = (JSON.parse(ev.data) || {}).exitCode; } catch (e) {}
+      finish(code === 0
+        ? '[done] sweep complete — reloading with the new postings…'
+        : '[done] sweep exited with code ' + code + ' (see data/scan-logs/)');
+      if (code === 0) setTimeout(function(){ location.reload(); }, 1500);
+    });
+    es.onerror = function(){
+      // The stream also drops when the server restarts; EventSource retries.
+      if (es && es.readyState === 2) finish('[!] lost connection to the server', 'term-hi');
+    };
+  }
+
+  btn.addEventListener('click', function(){
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = 'SCANNING…';
+    openTerm();
+    emit('[run] starting full discovery sweep — this takes 15-30 minutes.', 'term-hi');
+    emit('[run] safe to close this tab; the sweep keeps running on the server.');
+    fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d.ok) { finish('[!] ' + (d.error || 'server refused')); return; }
+        if (d.alreadyRunning) emit('[run] a sweep was already running — attaching to it.', 'term-hi');
+        attachStream();
+      })
+      .catch(function(){ finish('[!] could not reach the dashboard server'); });
   });
+
+  // A sweep already in flight (started from a terminal or another tab) adopts
+  // the UI on load, so the button never lies about what the machine is doing.
+  fetch('/api/scan').then(function(r){ return r.json(); }).then(function(d){
+    if (d && d.running) {
+      btn.disabled = true;
+      btn.textContent = 'SCANNING…';
+      openTerm();
+      emit('[run] a sweep is already running — attaching…', 'term-hi');
+      attachStream();
+    }
+  }).catch(function(){});
 })();
 </script>
 </body>
