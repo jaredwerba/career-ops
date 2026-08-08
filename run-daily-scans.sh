@@ -27,6 +27,12 @@ fi
   node scan-ats-full.mjs --region boston --since 7
   echo "--- ai-native ISV seed ---"
   node scan-ats-full.mjs --seeds ai-native --since 7
+  echo "--- VC portfolio seeds (YC + a16z) ---"
+  node scan-ats-full.mjs --seeds yc,a16z --since 7
+  echo "--- enterprise/Boston VC portfolios (GC, Insight, Battery, Bessemer, Sequoia) ---"
+  node scan-ats-full.mjs --seeds gc,insight,battery,bessemer,sequoia --since 7
+  echo "--- top-250 elite companies seed ---"
+  node scan-ats-full.mjs --seeds top250 --since 7
   echo "--- full ATS directory walk (fresh postings) ---"
   node scan-ats-full.mjs --since 2
   echo "--- rebuild dashboard ---"

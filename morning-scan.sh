@@ -12,7 +12,7 @@
 
 set -uo pipefail
 
-REPO="/Users/jkw/careerops"
+REPO="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$REPO/data/morning-logs"
 TODAY="$(date +%Y-%m-%d)"
 LOG="$LOG_DIR/$TODAY.log"
