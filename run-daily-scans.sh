@@ -96,8 +96,8 @@ if [ "$STREAM" = "1" ]; then INTERACTIVE=0; fi
 SPIN=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 PHASE_N=0
 case "$TIER" in
-  fast)  PHASE_TOTAL=7 ;;
-  heavy) PHASE_TOTAL=2 ;;
+  fast)  PHASE_TOTAL=6 ;;
+  heavy) PHASE_TOTAL=3 ;;
   full)  PHASE_TOTAL=9 ;;
 esac
 TOTAL_NEW=0
@@ -202,9 +202,16 @@ if [ "$TIER" = "heavy" ]; then
   # process (single pipeline.md write, so no cross-process race) and the
   # worker budget is divided among them. 40 total workers ≈ 6/seed.
   run_phase "all VC portfolios (7 seeds, parallel)"   env CAREEROPS_CONCURRENCY=40 node scan-ats-full.mjs --seeds yc,a16z,gc,insight,battery,bessemer,sequoia --since 7
+  # The directory walk covers ~12,900 companies and eats 429 retries from
+  # Workday — measured ~50 min alone. It looked cheap ("cached") but the 24h
+  # cache only holds the company LIST; every board is still fetched. It
+  # belongs overnight, not in the minutes-tier.
+  run_phase "full ATS directory walk (fresh)"         env CAREEROPS_CONCURRENCY=40 node scan-ats-full.mjs --since 2
 fi
 if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
   run_phase "top-250 elite companies seed"            node scan-ats-full.mjs --seeds top250 --since 7
+fi
+if [ "$TIER" = "full" ]; then
   run_phase "full ATS directory walk (fresh)"         node scan-ats-full.mjs --since 2
 fi
 run_phase "rebuild dashboard"                         node build-web-dashboard.mjs
