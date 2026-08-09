@@ -63,7 +63,10 @@ const CACHE_TTL_HOURS = 24;
 // careers_url and drops anything that doesn't resolve to the ATS's own host —
 // so a tampered dataset can at worst name boards that don't exist.
 const DATASET_BASE = 'https://raw.githubusercontent.com/Feashliaa/job-board-aggregator/main/data';
-const CONCURRENCY = 20;
+// Env-overridable so the nightly heavy tier can run hotter than interactive
+// use: CAREEROPS_CONCURRENCY=40 roughly halves portfolio-probe wall clock.
+// The floor/ceiling keep a typo from serializing the scan or hammering an ATS.
+const CONCURRENCY = Math.min(64, Math.max(1, parseInt(process.env.CAREEROPS_CONCURRENCY ?? '', 10) || 20));
 
 // Dataset entries are external input destined for URL interpolation — reject
 // anything outside a conservative slug charset.
@@ -295,7 +298,10 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
   let errors = 0;
   let droppedNoDate = 0;
 
-  await parallelEach(capped, CONCURRENCY, async (company) => {
+  // seedConcurrency: when several seeds run concurrently, the caller divides
+  // the worker budget among them so total connections stay bounded instead of
+  // multiplying (7 seeds × 20 workers = 140 sockets is a WAF invitation).
+  await parallelEach(capped, opts.seedConcurrency || CONCURRENCY, async (company) => {
     // A company without an explicit ats hint yields several candidate boards
     // (greenhouse/ashby/lever by slug, compact variants, website) — probe each
     // until one actually serves jobs. The old single greenhouse-by-slug guess
@@ -494,17 +500,33 @@ async function main() {
   }
 
   // ── Seed sources: VC portfolios + metro regions (--seeds / --region) ──
-  for (const seedId of opts.seeds) {
-    const seedSource = ALL_SEED_SOURCES[seedId];
-    log(`\n🌱 ${seedSource.label} (${seedId}-seed) — fetching portfolio...`);
-    const result = await runSeedScan(seedId, opts, ctx, seenUrls, seedSource.label);
-    if (result && result.offers) {
-      totalCompaniesScanned += result.total || 0;
-      totalErrors += result.errors || 0;
-      droppedNoDate += result.droppedNoDate || 0;
-      newOffers.push(...result.offers);
-      const undatedNote = result.droppedNoDate ? `, ${result.droppedNoDate} undated skipped — use --include-undated to keep` : '';
-      log(`  done — ${result.total} companies probed, ${result.offers.length} matches (${result.errors} errors${undatedNote})`);
+  // Seeds run CONCURRENTLY: each runSeedScan is independent network work, the
+  // shared seenUrls Set is safe under single-threaded interleaving, and all
+  // results funnel into the one pipeline.md write at the end of this process —
+  // so cross-seed parallelism carries none of the cross-process rewrite race
+  // that forces whole scans to serialize. With 7 seeds this collapses the
+  // heavy tier from sum-of-seeds to slowest-seed wall clock.
+  if (opts.seeds.length) {
+    const perSeed = Math.max(4, Math.ceil(CONCURRENCY / opts.seeds.length));
+    const started = opts.seeds.map(seedId => {
+      const seedSource = ALL_SEED_SOURCES[seedId];
+      log(`\n🌱 ${seedSource.label} (${seedId}-seed) — fetching portfolio... (${perSeed} workers)`);
+      return runSeedScan(seedId, { ...opts, seedConcurrency: perSeed }, ctx, seenUrls, seedSource.label)
+        .then(result => ({ seedId, label: seedSource.label, result }))
+        .catch(err => {
+          console.error(`⚠️  ${seedId}: seed scan failed — ${err.message}`);
+          return { seedId, label: seedSource.label, result: null };
+        });
+    });
+    for (const { seedId, result } of await Promise.all(started)) {
+      if (result && result.offers) {
+        totalCompaniesScanned += result.total || 0;
+        totalErrors += result.errors || 0;
+        droppedNoDate += result.droppedNoDate || 0;
+        newOffers.push(...result.offers);
+        const undatedNote = result.droppedNoDate ? `, ${result.droppedNoDate} undated skipped — use --include-undated to keep` : '';
+        log(`  ${seedId}-seed done — ${result.total} companies probed, ${result.offers.length} matches (${result.errors} errors${undatedNote})`);
+      }
     }
   }
 

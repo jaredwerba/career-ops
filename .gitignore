@@ -125,3 +125,6 @@ _to_delete/
 
 # Resume content with real identity (user layer)
 resume-content.local.js
+
+# Phone-push topic (semi-secret: anyone with the topic name can read the pushes)
+config/ntfy-topic.txt

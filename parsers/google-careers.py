@@ -27,7 +27,8 @@ import urllib.request
 
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36"}
 BASE = "https://www.google.com/about/careers/applications/jobs/results"
-QUERIES = ['"account executive"', '"field sales representative"', '"sales specialist" cloud', '"customer engineer"']
+QUERIES = ['"account executive"', '"field sales representative"', '"sales specialist" cloud', '"customer engineer"',
+           '"account manager" cloud', '"go-to-market"']
 PAGES_PER_QUERY = 3  # 20 cards/page
 
 

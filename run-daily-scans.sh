@@ -97,7 +97,7 @@ SPIN=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 PHASE_N=0
 case "$TIER" in
   fast)  PHASE_TOTAL=7 ;;
-  heavy) PHASE_TOTAL=3 ;;
+  heavy) PHASE_TOTAL=2 ;;
   full)  PHASE_TOTAL=9 ;;
 esac
 TOTAL_NEW=0
@@ -198,8 +198,10 @@ if [ "$TIER" = "full" ]; then
   run_phase "GC/Insight/Battery/Bessemer/Sequoia"     node scan-ats-full.mjs --seeds gc,insight,battery,bessemer,sequoia --since 7
 fi
 if [ "$TIER" = "heavy" ]; then
-  run_phase "YC + a16z portfolios"                    node scan-ats-full.mjs --seeds yc,a16z --since 7
-  run_phase "GC/Insight/Battery/Bessemer/Sequoia"     node scan-ats-full.mjs --seeds gc,insight,battery,bessemer,sequoia --since 7
+  # All 7 portfolios in ONE invocation: seeds run concurrently inside the
+  # process (single pipeline.md write, so no cross-process race) and the
+  # worker budget is divided among them. 40 total workers ≈ 6/seed.
+  run_phase "all VC portfolios (7 seeds, parallel)"   env CAREEROPS_CONCURRENCY=40 node scan-ats-full.mjs --seeds yc,a16z,gc,insight,battery,bessemer,sequoia --since 7
 fi
 if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
   run_phase "top-250 elite companies seed"            node scan-ats-full.mjs --seeds top250 --since 7
@@ -230,13 +232,45 @@ if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
     node shortlist.mjs --days 1 --top 20 2>&1
   } > data/shortlist-today.txt
 
+  # Publish the PII-free public board so results are reachable away from this
+  # machine (careerops-jobboard-public.vercel.app). Guarded: skipped silently
+  # when the vercel CLI or the project link is absent, and a deploy failure
+  # never fails the sweep.
+  if command -v vercel >/dev/null 2>&1 && [ -d dashboard-public/.vercel ]; then
+    echo "--- [$(date +%H:%M:%S)] publishing public board to vercel ---" >> "$LOG"
+    node build-web-dashboard.mjs --public >> "$LOG" 2>&1 || true
+    ( cd dashboard-public && vercel deploy --prod --yes ) >> "$LOG" 2>&1 || \
+      echo "vercel deploy failed — public board is stale (see above)" >> "$LOG"
+  fi
+
+  MATCHES=$(node shortlist.mjs --days 1 --urls 2>/dev/null | wc -l | tr -d ' ')
+
   # Desktop notification. Without this the 8am run is invisible — the whole
   # point is not having to remember to go look.
-  MATCHES=$(node shortlist.mjs --days 1 --urls 2>/dev/null | wc -l | tr -d ' ')
   if [ "${MATCHES:-0}" -gt 0 ]; then
     /usr/bin/osascript -e "display notification \"$MATCHES ranked matches overnight. Ask Claude to build resumes.\" with title \"career-ops — $MATCHES matches\"" 2>/dev/null || true
   else
     /usr/bin/osascript -e 'display notification "No ranked matches today." with title "career-ops"' 2>/dev/null || true
+  fi
+
+  # Phone push via ntfy.sh — reaches the user when they are NOT at this Mac.
+  # Opt-in by existence of config/ntfy-topic.txt (gitignored; the topic name is
+  # the only credential, so treat it like a password). Tapping the notification
+  # opens the public board. Delete the file to turn this off.
+  NTFY_TOPIC_FILE="config/ntfy-topic.txt"
+  if [ -f "$NTFY_TOPIC_FILE" ] && [ "${MATCHES:-0}" -gt 0 ]; then
+    NTFY_TOPIC=$(head -1 "$NTFY_TOPIC_FILE" | tr -d '[:space:]')
+    if [ -n "$NTFY_TOPIC" ]; then
+      # Score rows only (score + date columns) — the "N ranked matches" header
+      # also starts with digits and must not leak into the push body.
+      TOP3=$(node shortlist.mjs --days 1 --top 3 2>/dev/null | grep -E '^\s+[0-9]+\s+20[0-9]{2}-' | sed 's/^ *//' | cut -c1-90 | head -3)
+      curl -s --max-time 15 \
+        -H "Title: career-ops: $MATCHES new ranked matches" \
+        -H "Tags: briefcase" \
+        -H "Click: https://careerops-jobboard-public.vercel.app" \
+        -d "${TOP3:-Open the board for today's ranked matches.}" \
+        "https://ntfy.sh/$NTFY_TOPIC" >/dev/null 2>&1 || true
+    fi
   fi
 fi
 
