@@ -59,7 +59,10 @@ bar() {
 run_phase() {
   local title="$1"; shift
   PHASE_N=$(( PHASE_N + 1 ))
-  echo "--- $title ---" >> "$LOG"
+  # Timestamped so an unattended run's per-phase cost is recoverable from the
+  # log alone (the full sweep runs for hours; knowing which phase owns that
+  # time is the difference between guessing and measuring).
+  echo "--- [$(date +%H:%M:%S)] $PHASE_N/$PHASE_TOTAL $title ---" >> "$LOG"
 
   if [ "$STREAM" = "1" ]; then
     print -r -- "PHASE $PHASE_N/$PHASE_TOTAL start $title"

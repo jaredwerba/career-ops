@@ -179,6 +179,38 @@ export function parseA16zPayload(html) {
   /** @type {Map<string, SeedCompany>} */
   const seen = new Map();
 
+  // Strategy 0a: the embedded company dataset — a16z ships the FULL portfolio
+  // (855 companies) as JSON inside the page, while only ~20 render as cards.
+  // Company records are distinguishable from the page's other ~900 "title"
+  // objects (articles, announcements) by the id + logo_width sibling pair.
+  // Caught by testing on 2026-08-08: this fetcher was silently returning 0
+  // after a16z's "WR25" redesign broke strategies 1-3.
+  for (const match of html.matchAll(/"id":"\d+","logo_width":"[^"]*","title":"([^"]+)"/g)) {
+    const name = match[1].replace(/\\u0026/g, '&').replace(/\\"/g, '"').trim();
+    // The dataset contains placeholder rows for unannounced investments.
+    if (!name || name === '[untitled]') continue;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!slug || !SLUG_RE.test(slug) || seen.has(slug)) continue;
+    seen.set(slug, { name, slug, url: '', source: 'a16z' });
+  }
+
+  // Strategy 0b: data-company='{"name":"Coinbase",...}' card attributes — the
+  // rendered subset. Redundant with 0a today, kept because the two structures
+  // are independent and either could survive the next redesign alone.
+  for (const match of html.matchAll(/data-company='(\{[^']*\})'/g)) {
+    let obj;
+    try {
+      // Attribute values are HTML-escaped; &quot; would break JSON.parse.
+      obj = JSON.parse(match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#0?39;/g, "'"));
+    } catch { continue; }
+    const name = String(obj?.name || obj?.post_title || obj?.display_name || '').trim();
+    if (!name) continue;
+    const url = String(obj?.website || obj?.url || '').trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!slug || !SLUG_RE.test(slug) || seen.has(slug)) continue;
+    seen.set(slug, { name, slug, url, source: 'a16z' });
+  }
+
   // Strategy 1: JSON-LD embedded in the page (structured data block).
   // a16z sometimes embeds schema.org/Organization blocks — extract if present.
   const jsonLdMatches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
