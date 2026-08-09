@@ -1188,9 +1188,10 @@ const html = `<!doctype html>
   }
 
   btn.textContent = '▶ RUN SCAN';
-  // Measured, not guessed: the 2026-08-09 unattended run took 4h32m. The YC
-  // seed alone probes ~6,100 companies across several candidate boards each.
-  btn.title = 'Run the full discovery sweep — takes hours; keeps running if you close the tab';
+  // Fast tier only (~5-15 min): tracked companies, job boards, and every
+  // pre-verified seed. The heavy portfolio probing (YC/a16z/VCs, ~4.5h
+  // measured) runs nightly at 02:00 from its own launchd job.
+  btn.title = 'Run the fast discovery sweep (~5-15 min). Heavy portfolio probing runs nightly at 2am.';
 
   var es = null;
   function finish(msg, cls) {
@@ -1242,9 +1243,9 @@ const html = `<!doctype html>
     btn.disabled = true;
     btn.textContent = 'SCANNING…';
     openTerm();
-    emit('[run] starting full discovery sweep — this takes a few hours.', 'term-hi');
+    emit('[run] starting fast sweep — tracked companies + all pre-verified seeds (~5-15 min).', 'term-hi');
+    emit('[run] heavy portfolio probing (YC/a16z/VC portfolios) runs nightly at 2am on its own.');
     emit('[run] safe to close this tab; the sweep keeps running on the server.');
-    emit('[run] progress also lands in data/scan-logs/, and the 8am job does this daily.');
     fetch('/api/scan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       .then(function(r){ return r.json(); })
       .then(function(d){

@@ -4,10 +4,14 @@
 <dict>
   <key>Label</key>
   <string>com.jaredwerba.careerops-scan</string>
+  <!-- FAST tier: pre-verified sources only, minutes. The heavy portfolio
+       probing runs from com.jaredwerba.careerops-heavy.plist at 02:00. -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
     <string>/Users/jkw/careerops/run-daily-scans.sh</string>
+    <string>--tier</string>
+    <string>fast</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>

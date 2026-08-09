@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jaredwerba.careerops-heavy</string>
+  <!-- HEAVY tier: YC + a16z (~7,000 companies) and the five enterprise-VC
+       portfolios (~2,500), each probed across up to 5 candidate boards.
+       Measured at ~4.5h, which is why it runs overnight at 02:00 instead of
+       inside the 8am sweep — its finds are on the dashboard by morning, and
+       the fast tier stays a minutes-long job. The sweep lock in
+       run-daily-scans.sh serializes it against the 8am run if it overruns. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/jkw/careerops/run-daily-scans.sh</string>
+    <string>--tier</string>
+    <string>heavy</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>2</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <!-- Same catch-up rationale as the fast job: RunAtLoad fires at login/boot,
+       and the per-tier daily guard makes it a no-op when 02:00 already ran. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/jkw/careerops/data/scan-logs/launchd-heavy.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/jkw/careerops/data/scan-logs/launchd-heavy.err</string>
+</dict>
+</plist>

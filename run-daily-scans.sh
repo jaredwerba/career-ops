@@ -1,28 +1,84 @@
 #!/bin/zsh
-# run-daily-scans.sh — full discovery sweep for career-ops (launchd daily job).
-# Zero-token: hits public job-board APIs only, writes to data/pipeline.md,
-# rebuilds the static dashboard. Logs to data/scan-logs/.
+# run-daily-scans.sh — two-tier discovery sweep for career-ops.
 #
-# Interactive terminal → animated progress: a phase bar, a spinner with elapsed
-# time and a live new-offer count, and each phase's actual finds printed as it
-# completes. Full raw output still lands in the log either way.
-# launchd (no TTY) → silent, log-only: byte-identical to the original behavior.
+#   --tier fast   (default) pre-verified sources only: tracked companies +
+#                 job boards, Boston/AI-native/top250 seeds, fresh ATS walk,
+#                 dashboard + shortlist. Minutes, not hours. This is what the
+#                 8am launchd job and the dashboard RUN SCAN button run.
+#   --tier heavy  portfolio probing: YC + a16z (~7,000 companies) and the five
+#                 enterprise-VC portfolios (~2,500) — each probed across up to
+#                 5 candidate boards. Hours. Runs from its own launchd job at
+#                 02:00 so it lands before the morning fast sweep.
+#   --tier full   everything in one run (the pre-split behavior; used for
+#                 end-to-end timing).
+#   --force       rerun even if this tier already completed today.
+#
+# Zero-token: public job-board APIs only. Logs to data/scan-logs/.
+# Interactive terminal → animated progress. launchd (no TTY) → silent, log-only.
 set -u
 cd "$(dirname "$0")"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+TIER="fast"
+FORCE=0
+while (( $# )); do
+  case "$1" in
+    --force) FORCE=1 ;;
+    --tier) shift; TIER="${1:-fast}" ;;
+    --tier=*) TIER="${1#*=}" ;;
+    fast|heavy|full) TIER="$1" ;;   # bare tier name also accepted
+    *) echo "unknown arg: $1 (usage: run-daily-scans.sh [--tier fast|heavy|full] [--force])"; exit 2 ;;
+  esac
+  shift
+done
+case "$TIER" in fast|heavy|full) ;; *) echo "unknown tier: $TIER"; exit 2 ;; esac
 
 LOGDIR="data/scan-logs"
 mkdir -p "$LOGDIR"
 LOG="$LOGDIR/$(date +%Y-%m-%d).log"
 
-# The launchd job now also fires at login (RunAtLoad) so a day the Mac was
-# asleep at 8am still gets scanned. That means this script can be invoked more
-# than once a day, so bail out if today's sweep already finished. Pass --force
-# to override.
-if [ "${1:-}" != "--force" ] && grep -q '^===== done:' "$LOG" 2>/dev/null; then
-  echo "career-ops: today's scan already completed ($LOG) — skipping. Use --force to rerun."
+# Per-tier daily guard: launchd fires at its scheduled hour AND at login
+# (RunAtLoad catch-up for days the Mac was asleep), so a tier bails out if it
+# already completed today. --force overrides.
+if (( ! FORCE )) && grep -q "^===== done ($TIER):" "$LOG" 2>/dev/null; then
+  echo "career-ops: $TIER sweep already completed today ($LOG) — skipping. Use --force to rerun."
   exit 0
 fi
+
+# Cross-invocation lock. scan.mjs rewrites data/pipeline.md with a full
+# read-modify-writeFileSync, so two concurrent sweeps (e.g. a long 02:00 heavy
+# run still going when the 08:00 fast job fires, or the dashboard button while
+# either runs) can silently drop each other's rows. mkdir is atomic; the
+# second sweep waits its turn. Locks older than 12h are presumed crashed.
+LOCKDIR="data/.sweep.lock"
+acquire_lock() {
+  local waited=0
+  while ! mkdir "$LOCKDIR" 2>/dev/null; do
+    if [ -d "$LOCKDIR" ]; then
+      local age=$(( $(date +%s) - $(stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
+      if (( age > 43200 )); then
+        echo "career-ops: breaking stale sweep lock (${age}s old)" | tee -a "$LOG"
+        rm -rf "$LOCKDIR"
+        continue
+      fi
+    fi
+    if (( waited == 0 )); then
+      echo "career-ops: another sweep is running — waiting for it to finish (check: ps aux | grep run-daily-scans)" | tee -a "$LOG"
+    fi
+    sleep 60
+    waited=$(( waited + 60 ))
+    if (( waited >= 14400 )); then
+      echo "career-ops: gave up waiting for the sweep lock after 4h" | tee -a "$LOG"
+      exit 1
+    fi
+  done
+  # NOTE: the cleanup trap is deliberately NOT set here. In zsh an EXIT trap
+  # created inside a function fires when the FUNCTION returns — which would
+  # delete the lock the moment this returns (caught by the concurrency test:
+  # a second sweep walked straight through). It is set at top level below.
+}
+acquire_lock
+trap 'rm -rf "$LOCKDIR"' EXIT INT TERM
 
 INTERACTIVE=0
 [ -t 1 ] && INTERACTIVE=1
@@ -39,11 +95,15 @@ if [ "$STREAM" = "1" ]; then INTERACTIVE=0; fi
 # shreds multibyte braille glyphs — array elements are always whole.
 SPIN=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 PHASE_N=0
-PHASE_TOTAL=9
+case "$TIER" in
+  fast)  PHASE_TOTAL=7 ;;
+  heavy) PHASE_TOTAL=3 ;;
+  full)  PHASE_TOTAL=9 ;;
+esac
 TOTAL_NEW=0
 SWEEP_START=$SECONDS
 TMPOUT="$(mktemp -t careerops-phase)"
-trap 'rm -f "$TMPOUT"' EXIT
+trap 'rm -f "$TMPOUT"; rm -rf "$LOCKDIR"' EXIT INT TERM
 
 # bar 3 9 → ██████░░░░░░░░░░░░ (18 cells)
 bar() {
@@ -60,7 +120,7 @@ run_phase() {
   local title="$1"; shift
   PHASE_N=$(( PHASE_N + 1 ))
   # Timestamped so an unattended run's per-phase cost is recoverable from the
-  # log alone (the full sweep runs for hours; knowing which phase owns that
+  # log alone (the heavy tier runs for hours; knowing which phase owns that
   # time is the difference between guessing and measuring).
   echo "--- [$(date +%H:%M:%S)] $PHASE_N/$PHASE_TOTAL $title ---" >> "$LOG"
 
@@ -126,40 +186,58 @@ say_both() {
   if (( INTERACTIVE )) || [ "$STREAM" = "1" ]; then echo "$1"; fi
 }
 
-say_both "===== career-ops daily sweep: $(date) ====="
-run_phase "tracked companies + job boards"          node scan.mjs
-run_phase "Boston region seed"                      node scan-ats-full.mjs --region boston --since 7
-run_phase "AI-native ISV seed"                      node scan-ats-full.mjs --seeds ai-native --since 7
-run_phase "YC + a16z portfolios"                    node scan-ats-full.mjs --seeds yc,a16z --since 7
-run_phase "GC/Insight/Battery/Bessemer/Sequoia"     node scan-ats-full.mjs --seeds gc,insight,battery,bessemer,sequoia --since 7
-run_phase "top-250 elite companies"                 node scan-ats-full.mjs --seeds top250 --since 7
-run_phase "full ATS directory walk"                 node scan-ats-full.mjs --since 2
-run_phase "rebuild dashboard"                       node build-web-dashboard.mjs
-run_phase "ranked shortlist"                        node shortlist.mjs --days 1 --top 20
-say_both "===== done: $(date) ====="
+say_both "===== career-ops $TIER sweep: $(date) ====="
+
+if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
+  run_phase "tracked companies + job boards"          node scan.mjs
+  run_phase "Boston region seed"                      node scan-ats-full.mjs --region boston --since 7
+  run_phase "AI-native ISV seed"                      node scan-ats-full.mjs --seeds ai-native --since 7
+fi
+if [ "$TIER" = "full" ]; then
+  run_phase "YC + a16z portfolios"                    node scan-ats-full.mjs --seeds yc,a16z --since 7
+  run_phase "GC/Insight/Battery/Bessemer/Sequoia"     node scan-ats-full.mjs --seeds gc,insight,battery,bessemer,sequoia --since 7
+fi
+if [ "$TIER" = "heavy" ]; then
+  run_phase "YC + a16z portfolios"                    node scan-ats-full.mjs --seeds yc,a16z --since 7
+  run_phase "GC/Insight/Battery/Bessemer/Sequoia"     node scan-ats-full.mjs --seeds gc,insight,battery,bessemer,sequoia --since 7
+fi
+if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
+  run_phase "top-250 elite companies seed"            node scan-ats-full.mjs --seeds top250 --since 7
+  run_phase "full ATS directory walk (fresh)"         node scan-ats-full.mjs --since 2
+fi
+run_phase "rebuild dashboard"                         node build-web-dashboard.mjs
+if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
+  run_phase "ranked shortlist"                        node shortlist.mjs --days 1 --top 20
+fi
+
+say_both "===== done ($TIER): $(date) ====="
 
 if (( INTERACTIVE )); then
-  printf '\n \033[32m█\033[0m Sweep complete in %dm%02ds · \033[33m%d new offers\033[0m · log: %s\n' \
-    $(( (SECONDS - SWEEP_START) / 60 )) $(( (SECONDS - SWEEP_START) % 60 )) "$TOTAL_NEW" "$LOG"
+  printf '\n \033[32m█\033[0m %s sweep complete in %dm%02ds · \033[33m%d new offers\033[0m · log: %s\n' \
+    "$TIER" $(( (SECONDS - SWEEP_START) / 60 )) $(( (SECONDS - SWEEP_START) % 60 )) "$TOTAL_NEW" "$LOG"
 elif [ "$STREAM" = "1" ]; then
   print -r -- "SWEEP done $(( (SECONDS - SWEEP_START) / 60 ))m$(( (SECONDS - SWEEP_START) % 60 ))s ${TOTAL_NEW} new"
 fi
 
-# Ranked shortlist to its own file — this is the handoff to Claude ("build
-# resumes for today's top 5"), and it saves re-deriving the ranking by hand.
-{
-  echo "# career-ops shortlist — $(date +%Y-%m-%d)"
-  echo
-  node shortlist.mjs --days 1 --top 20 2>&1
-} > data/shortlist-today.txt
+# Morning artifacts belong to the fast/full sweep; the 02:00 heavy tier only
+# rebuilds the dashboard (above) so overnight finds are on the board by 8am.
+if [ "$TIER" = "fast" ] || [ "$TIER" = "full" ]; then
+  # Ranked shortlist to its own file — this is the handoff to Claude ("build
+  # resumes for today's top 5"), and it saves re-deriving the ranking by hand.
+  {
+    echo "# career-ops shortlist — $(date +%Y-%m-%d)"
+    echo
+    node shortlist.mjs --days 1 --top 20 2>&1
+  } > data/shortlist-today.txt
 
-# Desktop notification. Without this the 8am run is invisible — the whole point
-# is not having to remember to go look.
-MATCHES=$(node shortlist.mjs --days 1 --urls 2>/dev/null | wc -l | tr -d ' ')
-if [ "${MATCHES:-0}" -gt 0 ]; then
-  /usr/bin/osascript -e "display notification \"$MATCHES ranked matches overnight. Ask Claude to build resumes.\" with title \"career-ops — $MATCHES matches\"" 2>/dev/null || true
-else
-  /usr/bin/osascript -e 'display notification "No ranked matches today." with title "career-ops"' 2>/dev/null || true
+  # Desktop notification. Without this the 8am run is invisible — the whole
+  # point is not having to remember to go look.
+  MATCHES=$(node shortlist.mjs --days 1 --urls 2>/dev/null | wc -l | tr -d ' ')
+  if [ "${MATCHES:-0}" -gt 0 ]; then
+    /usr/bin/osascript -e "display notification \"$MATCHES ranked matches overnight. Ask Claude to build resumes.\" with title \"career-ops — $MATCHES matches\"" 2>/dev/null || true
+  else
+    /usr/bin/osascript -e 'display notification "No ranked matches today." with title "career-ops"' 2>/dev/null || true
+  fi
 fi
 
 # keep 30 days of logs

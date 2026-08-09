@@ -57,7 +57,9 @@ function readBody(req, limit = 5 * 1024 * 1024) {
 //     port (DNS-rebinding defense) or whose Origin is a different site (CSRF —
 //     without it, any page you visit could POST here and kick off a sweep);
 //   * one sweep at a time.
-const SWEEP_CMD = ['/bin/zsh', ['run-daily-scans.sh', '--force']];
+// Fast tier: pre-verified sources, minutes. The heavy portfolio probing has
+// its own 02:00 launchd job — a button that takes 4.5h helps nobody.
+const SWEEP_CMD = ['/bin/zsh', ['run-daily-scans.sh', '--tier', 'fast', '--force']];
 const MAX_BUFFERED_LINES = 4000;
 
 const sweep = {
