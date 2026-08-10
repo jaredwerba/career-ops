@@ -298,10 +298,11 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
   let errors = 0;
   let droppedNoDate = 0;
 
-  // seedConcurrency: when several seeds run concurrently, the caller divides
-  // the worker budget among them so total connections stay bounded instead of
-  // multiplying (7 seeds × 20 workers = 140 sockets is a WAF invitation).
-  await parallelEach(capped, opts.seedConcurrency || CONCURRENCY, async (company) => {
+  // probeCompany: one company's full candidate-board probe. Concurrency comes
+  // either from the caller's SHARED pool (opts.sharedLimit — one budget across
+  // all concurrently running seeds, so drained seeds donate their slots to the
+  // big ones) or, standalone, from this scan's own worker pool.
+  const probeCompany = async (company) => {
     // A company without an explicit ats hint yields several candidate boards
     // (greenhouse/ashby/lever by slug, compact variants, website) — probe each
     // until one actually serves jobs. The old single greenhouse-by-slug guess
@@ -345,7 +346,13 @@ export async function runSeedScan(seedId, opts, ctx, seenUrls, label) {
       seenUrls.add(job.url);
       offers.push({ ...job, source: sourceName, dateStatus: job.postedAt ? 'dated' : 'unknown' });
     }
-  });
+  };
+
+  if (opts.sharedLimit) {
+    await Promise.all(capped.map((c) => opts.sharedLimit(() => probeCompany(c))));
+  } else {
+    await parallelEach(capped, CONCURRENCY, probeCompany);
+  }
 
   return { offers, errors, droppedNoDate, total: capped.length };
 }
@@ -361,6 +368,33 @@ async function parallelEach(items, limit, fn) {
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+}
+
+/**
+ * Shared concurrency limiter (p-limit shape): one pool of `max` slots that
+ * several concurrent consumers draw from. Built for the parallel seed scans —
+ * a fixed per-seed split starves the big seed once the small ones drain
+ * (measured 2026-08-10: YC at 6 of 40 workers ran 1h17m while 34 slots sat
+ * idle; the sequential run at 20 workers had done it in 28m). With a shared
+ * pool, finished seeds hand their slots to whichever seeds still have work.
+ */
+export function makeLimiter(max) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    active--;
+    if (queue.length) queue.shift()();
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    const run = () => {
+      active++;
+      Promise.resolve().then(fn).then(
+        (v) => { resolve(v); next(); },
+        (e) => { reject(e); next(); },
+      );
+    };
+    if (active < max) run(); else queue.push(run);
+  });
 }
 
 // ── Liveness verification (reuses liveness-browser.mjs) ────────────
@@ -507,11 +541,14 @@ async function main() {
   // that forces whole scans to serialize. With 7 seeds this collapses the
   // heavy tier from sum-of-seeds to slowest-seed wall clock.
   if (opts.seeds.length) {
-    const perSeed = Math.max(4, Math.ceil(CONCURRENCY / opts.seeds.length));
+    // ONE pool for every seed: total in-flight probes never exceed
+    // CONCURRENCY, and a seed that finishes hands its slots to the rest
+    // (fixed split starved YC at 6/40 workers — see makeLimiter).
+    const sharedLimit = makeLimiter(CONCURRENCY);
     const started = opts.seeds.map(seedId => {
       const seedSource = ALL_SEED_SOURCES[seedId];
-      log(`\n🌱 ${seedSource.label} (${seedId}-seed) — fetching portfolio... (${perSeed} workers)`);
-      return runSeedScan(seedId, { ...opts, seedConcurrency: perSeed }, ctx, seenUrls, seedSource.label)
+      log(`\n🌱 ${seedSource.label} (${seedId}-seed) — fetching portfolio... (shared pool: ${CONCURRENCY})`);
+      return runSeedScan(seedId, { ...opts, sharedLimit }, ctx, seenUrls, seedSource.label)
         .then(result => ({ seedId, label: seedSource.label, result }))
         .catch(err => {
           console.error(`⚠️  ${seedId}: seed scan failed — ${err.message}`);

@@ -285,6 +285,7 @@ const USER_PATHS = [
   'run-daily-scans.sh',
   'morning-scan.sh',
   'com.jaredwerba.careerops-scan.plist',
+  'com.jaredwerba.careerops-heavy.plist',
   'modes/resume-factory.md',
   'modes/resume-factory-spec.md',
   'resume_build_template.js',
