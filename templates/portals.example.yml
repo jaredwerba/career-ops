@@ -1598,6 +1598,17 @@ job_boards:
     enabled: false
     notes: "Polish job board — Other specialists division"
 
+  # ── a16z speedrun talent network ───────────────────────────────────
+  # Public read API, no key. Account-executive sales roles, newest first,
+  # portfolio plus the wider market. Links stay on their site. Raise
+  # max_pages (default 6, cap 20) for a deeper pull. Disabled by default.
+
+  - name: Speedrun AE
+    provider: speedrun
+    enabled: false
+    max_pages: 6
+    notes: "a16z speedrun talent network — account executive roles"
+
   # ── JustJoin.it / NoFluffJobs (Polish tech market) ────────────────────────
   # Public job-board APIs. Disabled by default; enable and rely on the global
   # title_filter/location_filter/salary_filter above for your target profile.
